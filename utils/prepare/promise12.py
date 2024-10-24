@@ -4,7 +4,7 @@ import torch.utils.data as data
 import numpy as np
 
 class PROMISE12(data.Dataset):
-    def __init__(self, mode, images, GT=None, transform=None, GT_transform=None):
+    def __init__(self, mode, images, GT=None, transform=None, GT_transform=None, data_format="mhd"):
         if images is None:
             raise(RuntimeError("images must be set"))
         self.mode = mode
@@ -12,6 +12,7 @@ class PROMISE12(data.Dataset):
         self.GT = GT
         self.transform = transform
         self.GT_transform = GT_transform
+        self.data_format = data_format
 
     def __getitem__(self, index):
         """
@@ -25,7 +26,11 @@ class PROMISE12(data.Dataset):
             id = keys[index]
             image = self.images[id]
             # print("image shape from DataManager shown in PROMISE12:" + str(image.shape))
-            x, y, z = image.shape # added by Chao
+            if self.data_format=="npy":
+                z, y, x = image.shape 
+            else:
+                x, y, z = image.shape 
+
             image = image.reshape((1, z, y, x)) # added by Chao
             image = image.astype(np.float32)
             if self.transform is not None:
@@ -36,7 +41,10 @@ class PROMISE12(data.Dataset):
             if self.GT is None:
                 return image, id
             else:
-                GT = self.GT[id[:-4] + '_segmentation' + '.mhd']
+                if self.data_format == "mhd":
+                    GT = self.GT[id[:-4] + '_segmentation.' + self.data_format]
+                elif self.data_format == "npy": 
+                    GT = self.GT[id[:-4] + '.' + self.data_format]
                 if self.GT_transform is not None:
                     GT = self.GT_transform(GT)
                 return image, GT, id
@@ -45,7 +53,10 @@ class PROMISE12(data.Dataset):
             id = keys[index]
             image = self.images[id]
             # print("image shape from DataManager shown in PROMISE12:" + str(image.shape))
-            x,y,z = image.shape
+            if self.data_format=="npy":
+                z, y, x = image.shape 
+            else:
+                x, y, z = image.shape 
             image = image.reshape((1,z,y,x))
             image = image.astype(np.float32)
             return image, id

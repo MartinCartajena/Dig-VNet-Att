@@ -1,4 +1,3 @@
-#!/anaconda/envs/torvnet python3
 
 import sys
 import os
@@ -32,7 +31,7 @@ params['ModelParams']['nProc'] = 1  # the number of threads to do data augmentat
 
 #params of the DataManager
 params['DataManagerParams']['dstRes'] = np.asarray([1,1,1.5],dtype=float)
-params['DataManagerParams']['VolSize'] = np.asarray([64,64,32],dtype=int)
+params['DataManagerParams']['VolSize'] = np.asarray([96,96,16],dtype=int)
 params['DataManagerParams']['normDir'] = False  # if rotates the volume according to its transformation in the mhd file. Not reccommended.
 
 print('\n+preset parameters:\n' + str(params))
@@ -42,7 +41,7 @@ print('\n+preset parameters:\n' + str(params))
 parser = argparse.ArgumentParser()
 parser.add_argument('--batchSz', type=int, default=1)
 parser.add_argument('--dice', action='store_true', default=True)
-parser.add_argument('--gpu_ids', type=list, default=[1])
+parser.add_argument('--gpu_ids', type=list, default=[0])
 parser.add_argument('--nEpochs', type=int, default=50)
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
@@ -50,12 +49,23 @@ parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
+parser.add_argument('-i', '--inference', default='', type=str, metavar='PATH',
+                        help='run inference on data set and save results')
 parser.add_argument('--weight-decay', '--wd', default=1e-8, type=float,
                     metavar='W', help='weight decay (default: 1e-8)')
 parser.add_argument('--no-cuda', action='store_true', default=False)
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--opt', type=str, default='adam',
                     choices=('sgd', 'adam', 'rmsprop'))
+
+"""
+Parametros para los datos de entrada:
+"""
+parser.add_argument('--data_format', type=str, default='mhd')  
+parser.add_argument('--data_path', type=str, default='')
+parser.add_argument('--data_aug', action='store_true', default=False)
+parser.add_argument('--infer_data_path', type=str, default='')
+
 args = parser.parse_args()
 
 print('\n+sys arguments:\n' + str(args))

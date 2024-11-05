@@ -11,8 +11,6 @@ from tqdm import tqdm
 
 # from logger import Logger as logger
 from evaluate.loss.dice_loss import DiceLoss
-from evaluate.loss.dice_loss import dsc
-# from utils.utils_v2 import log_images, dsc
 
 import torchvision.transforms as transforms_tv
 import utils.prepare.promise12 as promise12
@@ -62,18 +60,23 @@ def main(args):
                 optimizer.zero_grad()
 
                 with torch.set_grad_enabled(phase == "train"):
+                    
+                    x = x.requires_grad_(True) 
+
                     y_pred = vnet(x)
 
-                    # _, y_pred = torch.max(y_pred, dim=1)
+                    _, y_pred = torch.max(y_pred, dim=1)
                     
-                    y_true = y_true.to(dtype=torch.long)
+                    # y_true = y_true.to(dtype=torch.long)
                     
-                    loss_function = nn.CrossEntropyLoss(reduction='mean')
-                    loss = loss_function(y_pred, y_true)
+                    # loss_function = nn.CrossEntropyLoss(reduction='mean')
+                    # loss = loss_function(y_pred, y_true)
                     
-                    print("\nTRAIN --> CE Loss per batch " + str(loss.item()))
+                    # print("\nTRAIN --> CE Loss per batch " + str(loss.item()))
 
-                    # loss = dsc_loss(y_pred, y_true)
+                    loss = dsc_loss(y_pred, y_true)
+                    
+                    loss = loss.requires_grad_(True)
 
                     if phase == "valid":
                         loss_valid.append(loss.item())

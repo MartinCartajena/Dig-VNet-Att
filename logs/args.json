@@ -1,0 +1,1 @@
+{"batch_size": 16, "epochs": 1, "lr": 0.0001, "device": "cuda:0", "workers": 1, "vis_images": 200, "vis_freq": 10, "weights": "./weights", "logs": "./logs", "image_path": "/app/data/", "data_format": "npy"}

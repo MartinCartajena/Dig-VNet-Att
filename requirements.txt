@@ -6,3 +6,6 @@ graphviz
 SimpleITK
 matplotlib
 scikit-image
+tqdm
+tensorflow
+medpy

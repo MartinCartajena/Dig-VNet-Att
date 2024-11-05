@@ -35,6 +35,7 @@ import utils.prepare.promise12 as promise12
 import evaluate.make_graph as make_graph
 from functools import reduce
 import operator
+import evaluate.loss.cross_entropy as ce
 
 from utils.prepare.load import load_npy_files_from_directory
 
@@ -67,14 +68,8 @@ def inference(params, args, loader, model, resultDir):
     model.eval()
     # assume single GPU / batch size 1
     for batch_idx, data in enumerate(loader):
-        data, id = data
-        id = id[0]
-        
-        if args.data_format == "mhd":
-            itk_img = sitk.ReadImage(os.path.join(src, id))
-            origin = np.array(list(reversed(itk_img.GetOrigin())))
-            spacing = np.array(list(reversed(itk_img.GetSpacing())))
-            
+        data, ids = data
+          
         # pdb.set_trace()
         _, _, z, y, x = data.shape # need to subset shape of 3-d. by Chao.
         # convert names to batch tensor
@@ -84,21 +79,27 @@ def inference(params, args, loader, model, resultDir):
         with torch.no_grad():
             data = Variable(data)
         output = model(data)
-        _, output = output.max(1)
-        output = output.view((x, y, z))
-        # pdb.set_trace()
-        output = output.cpu()
-
-        print("save {}".format(id))
         
         if not os.path.exists(resultDir + "/predict/"):
             os.makedirs(resultDir + "/predict/")
             
-        if args.data_format == "mhd":
-            utils.save_updated_image(output, resultDir + "/predict/" +  id + "_predicted.mhd", origin, spacing)
-        elif args.data_format == "npy":
-            np_output = output.numpy()
-            np.save(resultDir + "/predict/" + id, np_output)
+        for i in range(output.size(0)):
+            _, output_i = output[i,:,:].max(1)
+            output_i = output_i.view((x, y, z))
+            # pdb.set_trace()
+            output_i = output_i.cpu()
+
+            print("save {}".format(ids[i]))
+        
+            if args.data_format == "mhd":
+                itk_img = sitk.ReadImage(os.path.join(src, ids[i]))
+                origin = np.array(list(reversed(itk_img.GetOrigin())))
+                spacing = np.array(list(reversed(itk_img.GetSpacing())))
+                utils.save_updated_image(output_i, resultDir + "/predict/" +  ids[i] + "_predicted.mhd", origin, spacing)
+            elif args.data_format == "npy":
+                np_output = output_i.numpy()
+                np.save(resultDir + "/predict/" + ids[i], np_output)
+                
 # performing post-train test:
 # train.py --resume <model checkpoint> --i <input directory (*.mhd)> --save <output directory>
 
@@ -307,62 +308,160 @@ def train_dice(args, epoch, model, trainLoader, optimizer, trainF):
     model.train()
     nProcessed = 0
     nTrain = len(trainLoader.dataset)
-    for batch_idx, output in enumerate(trainLoader):
+    loss_list = []
+    
+    print("\nTrain loss --> Epoch " + str(epoch) + "\n")
+    
+    for batch_idx, output in enumerate(trainLoader):       
+        
         data, target, id = output
-        # print("training with {}".format(id[0]))
-        target = target[0,:,:,:].view(-1) # right? added by Chao. 
+
+        if args.loss == "dice":
+            target = target.view(target.size(0),-1)       
+            
         if args.cuda:
             data, target = data.cuda(), target.cuda()
-
+            
         data = Variable(data)
         target = Variable(target)
-        # data, target = Variable(data), Variable(target)
+        
         optimizer.zero_grad()
+                
         output = model(data)
         
-        # pdb.set_trace()
-        loss = bioloss.dice_loss(output, target)
-        # make_graph.save('/tmp/t.dot', loss.creator); assert(False)
+        if args.loss == "dice":
+
+            output = output.permute(0, 2, 3, 4, 1).contiguous()
+            output.view(output.size(0), output.numel() // (2 * output.size(0)), 2)
+            
+            loss_global = 0.0
+            for i in range(output.size(0)):          
+                        
+                loss_loc = bioloss.dice_loss(output[i,:,:], target[i,:])
+                loss_global += loss_loc.data[0].item()
+            
+            loss_global = loss_global / output.size(0)           
+            loss = torch.tensor(loss_global, device='cuda' if args.cuda else 'cpu', requires_grad=True)        
+            loss.data = torch.Tensor([loss_global])    
+            loss_list.append(loss.data[0])
+            
+            print("\n\tFor trainning: Epoch: {} \t Loss per batches: {:.4f}", epoch, loss.item())
+            
+            loss_per_epoch = sum([loss.item() for loss in loss_list]) / len(loss_list)
+
+        
+        elif args.loss == "CE":
+                
+            print("\n\tCE loss for " + str(output.shape) + " prediction.")
+              
+            target = target.to(dtype=torch.long)
+            """
+            Parameters:
+                weight (Tensor, optional) – a manual rescaling weight given to each class. If given, has to be a Tensor of size C and floating point dtype
+                size_average (bool, optional) – Deprecated (see reduction). By default, the losses are averaged over each loss element in the batch. Note that for some losses, there are multiple elements per sample. If the field size_average is set to False, the losses are instead summed for each minibatch. Ignored when reduce is False. Default: True
+                ignore_index (int, optional) – Specifies a target value that is ignored and does not contribute to the input gradient. When size_average is True, the loss is averaged over non-ignored targets. Note that ignore_index is only applicable when the target contains class indices.
+                reduction (str, optional) – Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'. 'none': no reduction will be applied, 'mean': the weighted mean of the output is taken, 'sum': the output will be summed. Note: size_average and reduce are in the process of being deprecated, and in the meantime, specifying either of those two args will override reduction. Default: 'mean'
+                label_smoothing (float, optional) – A float in [0.0, 1.0]. Specifies the amount of smoothing when computing the loss, where 0.0 means no smoothing. The targets become a mixture of the original ground truth and a uniform distribution as described in Rethinking the Inception Architecture for Computer Vision. Default: 0.0
+            """
+            loss_function = nn.CrossEntropyLoss(reduction='mean')
+            loss = loss_function(output, target)
+            
+            # loss_loc = ce.cross_entropy_loss(output[i,:,:], target[i,:])
+            loss_list.append(loss.item())
+            
+            loss_per_epoch = sum(loss_list) / len(loss_list)
+
+            
+            print("\tTrainning --> Epoch: {} \t Loss per batches: {:.4f}".format(epoch, loss.item()))
+          
+        elif args.loss == "diceCE":
+            print("TODO fusion")
+               
         loss.backward()
         optimizer.step()
         nProcessed += len(data)
-        err = 100.*(1. - loss.data[0]) # loss.data[0] is dice coefficient? By Chao.
-        # partialEpoch = epoch + batch_idx / len(trainLoader) - 1
-        # print('Train Epoch: {:.2f} [{}/{} ({:.0f}%)]\tLoss: {:.8f}\tError: {:.8f}'.format(
-        #     partialEpoch, nProcessed, nTrain, 100. * batch_idx / len(trainLoader),
-        #     loss.data[0], err))
 
-    print('\nFor trainning: Epoch: {} \tdice_coefficient: {:.4f}\tError: {:.4f}\n'.format(
-    epoch, loss.data[0], err))
+    err_per_epoch = 100.*(1. - loss_per_epoch)
+    
+    print('\nFor trainning: Epoch: {} \tTotal loss: {:.4f}\tError: {:.4f}\n'.format(
+    epoch, loss_per_epoch, err_per_epoch))
+    
+    if err_per_epoch == 100.0000:
+        print("El loss ha caido mcho...")
 
         # trainF.write('{},{},{}\n'.format(partialEpoch, loss.data[0], err))
-    trainF.write('{},{},{}\n'.format(epoch, loss.data[0], err))
+    trainF.write('{},{},{}\n'.format(epoch, loss_per_epoch, err_per_epoch))
     trainF.flush()
 
 def test_dice(args, epoch, model, testLoader, optimizer, testF):
     model.eval()
     test_dice = 0
     incorrect = 0
+    
     for batch_idx, output in enumerate(testLoader):
         data, target, id = output
         # print("testing with {}".format(id[0]))
-        target = target[0,:,:,:].view(-1) # right? added by Chao. 
         if args.cuda:
             data, target = data.cuda(), target.cuda()
+            
         data = Variable(data)
         target = Variable(target)
+        
         output = model(data)
-        dice = bioloss.dice_loss(output, target).data[0]
-        test_dice += dice
-        incorrect += (1. - dice)
+        
+        if args.loss == "dice":
+            target = target.view(target.size(0),-1)       
+
+            output = output.permute(0, 2, 3, 4, 1).contiguous()
+            output.view(output.size(0), output.numel() // (2 * output.size(0)), 2)
+            
+            loss_global = 0.0
+            for i in range(output.size(0)):          
+                        
+                loss_loc = bioloss.dice_loss(output[i,:,:], target[i,:])
+                loss_global += loss_loc.data[0].item()
+            
+            loss_global = loss_global / output.size(0)           
+            loss = torch.tensor(loss_global, device='cuda' if args.cuda else 'cpu', requires_grad=True)        
+            loss.data = torch.Tensor([loss_global])    
+            
+            print("\n\tFor trainning: Epoch: {} \t Loss per batches: {:.4f}", epoch, loss.item())
+            
+            loss_global = loss_global / output.size(0)
+        
+            test_dice += loss_global
+            incorrect += (1. - loss_global)
+            
+        elif args.loss == "CE":
+                
+            print("\n\tCE loss for " + str(output.shape) + " prediction.")
+              
+            target = target.to(dtype=torch.long)
+            """
+            Parameters:
+                weight (Tensor, optional) – a manual rescaling weight given to each class. If given, has to be a Tensor of size C and floating point dtype
+                size_average (bool, optional) – Deprecated (see reduction). By default, the losses are averaged over each loss element in the batch. Note that for some losses, there are multiple elements per sample. If the field size_average is set to False, the losses are instead summed for each minibatch. Ignored when reduce is False. Default: True
+                ignore_index (int, optional) – Specifies a target value that is ignored and does not contribute to the input gradient. When size_average is True, the loss is averaged over non-ignored targets. Note that ignore_index is only applicable when the target contains class indices.
+                reduction (str, optional) – Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'. 'none': no reduction will be applied, 'mean': the weighted mean of the output is taken, 'sum': the output will be summed. Note: size_average and reduce are in the process of being deprecated, and in the meantime, specifying either of those two args will override reduction. Default: 'mean'
+                label_smoothing (float, optional) – A float in [0.0, 1.0]. Specifies the amount of smoothing when computing the loss, where 0.0 means no smoothing. The targets become a mixture of the original ground truth and a uniform distribution as described in Rethinking the Inception Architecture for Computer Vision. Default: 0.0
+            """
+            loss_function = nn.CrossEntropyLoss(reduction='mean')
+            loss = loss_function(output, target)
+            
+            # loss_loc = ce.cross_entropy_loss(output[i,:,:], target[i,:])            
+                    
+            test_dice += loss.item()
+            incorrect += (1. - loss.item())
+            
+            print("\tTrainning --> Epoch: {} \t Loss per batches: {:.4f}".format(epoch, loss.item()))
+          
+        elif args.loss == "diceCE":
+            print("TODO fusion")
 
     nTotal = len(testLoader)
-    test_dice /= nTotal  # loss function already averages over batch size
+    test_dice /= nTotal  
     err = 100.*incorrect/nTotal
-    # print('\nTest set: Average Dice Coeff: {:.4f}, Error: {}/{} ({:.0f}%)\n'.format(
-    #     test_dice, incorrect, nTotal, err))
-    #
-    # testF.write('{},{},{}\n'.format(epoch, test_loss, err))
+
     print('\nFor testing: Epoch:{}\tAverage Dice Coeff: {:.4f}\tError:{:.4f}\n'.format(epoch, test_dice, err))
 
     testF.write('{},{},{}\n'.format(epoch, test_dice, err))

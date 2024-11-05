@@ -56,6 +56,8 @@ parser.add_argument('--weight-decay', '--wd', default=1e-8, type=float,
                     metavar='W', help='weight decay (default: 1e-8)')
 parser.add_argument('--no-cuda', action='store_true', default=False)
 parser.add_argument('--seed', type=int, default=1)
+parser.add_argument('--loss', type=str, default="dice", 
+                    choices=('dice', 'CE', 'diceCE') )
 parser.add_argument('--opt', type=str, default='adam',
                     choices=('sgd', 'adam', 'rmsprop'))
 

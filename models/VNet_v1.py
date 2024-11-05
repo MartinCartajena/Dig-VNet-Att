@@ -163,8 +163,8 @@ class softmax_out(nn.Module):
         # Do NOT add normalize layer, or its values vanish.
         y_conv = self.conv_2(self.conv_1(x))
         
-        y_conv = y_conv.permute(0, 2, 3, 4, 1).contiguous()
-        y_conv = y_conv.view(y_conv.numel() // (2 * y_conv.size(0)), 2)
+        # y_conv = y_conv.permute(0, 2, 3, 4, 1).contiguous()
+        # y_conv = y_conv.view(y_conv.size(0), y_conv.numel() // (2 * y_conv.size(0)), 2)
         y_conv = F.softmax(y_conv,dim=1)
 
         return y_conv

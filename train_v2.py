@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 # from logger import Logger as logger
 from evaluate.loss.dice_loss import DiceLoss
+from evaluate.loss.dice_loss import dsc
 
 import torchvision.transforms as transforms_tv
 import utils.prepare.promise12 as promise12
@@ -65,7 +66,7 @@ def main(args):
 
                     y_pred = vnet(x)
 
-                    _, y_pred = torch.max(y_pred, dim=1)
+                    _, y_pred = y_pred.max(1)
                     
                     # y_true = y_true.to(dtype=torch.long)
                     
@@ -76,7 +77,8 @@ def main(args):
 
                     loss = dsc_loss(y_pred, y_true)
                     
-                    loss = loss.requires_grad_(True)
+                    if phase == "train":
+                        loss = loss.requires_grad_(True)
 
                     if phase == "valid":
                         loss_valid.append(loss.item())
@@ -97,7 +99,7 @@ def main(args):
                                 #     log_images(x, y_true, y_pred)[:num_images],
                                 #     step,
                                 # )
-                                print("\nVALIDATION --> tag " + str(tag) + "\tnum_images " + str(num_images))
+                                # print("\nVALIDATION --> tag " + str(tag) + "\tnum_images " + str(num_images))
 
                     if phase == "train":
                         loss_train.append(loss.item())
@@ -110,11 +112,19 @@ def main(args):
 
             if phase == "valid":
                 # log_loss_summary(logger, loss_valid, step, prefix="val_")
+                             
+                # mean_dsc = np.mean(
+                #     dsc_per_volume(
+                #         validation_pred,
+                #         validation_true,
+                #         loader_valid.dataset.patient_slice_index,
+                #     )
+                # )
+                
                 mean_dsc = np.mean(
-                    dsc_per_volume(
+                    dsc_per_volume_not_flatten(
                         validation_pred,
-                        validation_true,
-                        loader_valid.dataset.patient_slice_index,
+                        validation_true
                     )
                 )
                 # logger.scalar_summary("val_dsc", mean_dsc, step)
@@ -158,7 +168,7 @@ def data_loaders(args):
 
     return loader_train, loader_valid
 
-
+# si la prediccion esta flatten
 def dsc_per_volume(validation_pred, validation_true, patient_slice_index):
     dsc_list = []
     num_slices = np.bincount([p[0] for p in patient_slice_index])
@@ -170,6 +180,14 @@ def dsc_per_volume(validation_pred, validation_true, patient_slice_index):
         index += num_slices[p]
     return dsc_list
 
+def dsc_per_volume_not_flatten(validation_pred, validation_true):
+    dsc_list = []
+    for i in range(len(validation_true)):
+        y_pred = validation_pred[i].flatten() 
+        y_true = validation_true[i].flatten()
+        dsc_list.append(dsc(y_pred, y_true))
+        
+    return dsc_list
 
 def log_loss_summary(logger, loss, step, prefix=""):
     logger.scalar_summary(prefix + "loss", np.mean(loss), step)
@@ -177,7 +195,7 @@ def log_loss_summary(logger, loss, step, prefix=""):
 
 def makedirs(args):
     os.makedirs(args.weights, exist_ok=True)
-    os.makedirs(args.logs, exist_ok=True)
+    # os.makedirs(args.logs, exist_ok=True)
 
 
 def snapshotargs(args):

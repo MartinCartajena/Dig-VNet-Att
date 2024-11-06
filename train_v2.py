@@ -42,8 +42,8 @@ def main(args):
 
     optimizer = optim.Adam(vnet.parameters(), lr= args.lr)
     
-    trainF = open(os.path.join("./results/logs/", 'train_2.csv'), 'w')
-    validF = open(os.path.join("./results/logs/", 'validation_2.csv'), 'w')
+    trainF = open(os.path.join("./results/logs/", 'train_def.csv'), 'w')
+    validF = open(os.path.join("./results/logs/", 'validation_def.csv'), 'w')
 
     loss_train = []
     loss_valid = []

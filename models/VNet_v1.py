@@ -163,11 +163,15 @@ class softmax_out(nn.Module):
         # Do NOT add normalize layer, or its values vanish.
         y_conv = self.conv_2(self.conv_1(x))
         
-        # y_conv = y_conv.permute(0, 2, 3, 4, 1).contiguous()
-        # y_conv = y_conv.view(y_conv.size(0), y_conv.numel() // (2 * y_conv.size(0)), 2)
-        y_conv = F.softmax(y_conv,dim=1)
-
-        return y_conv
+        """ Hacer return de dos canales hace que luego tengamos que usar funciones no diferenciables
+        , por lo que el grafo de gradiantes se rompe... Mejor usar una softmax o en este caso
+        un sigmoide... Sigmoid es lo mismo que softmax pero solamente para una clase. """
+        # # y_conv = y_conv.permute(0, 2, 3, 4, 1).contiguous()
+        # # y_conv = y_conv.view(y_conv.size(0), y_conv.numel() // (2 * y_conv.size(0)), 2)
+        # y_conv = F.softmax(y_conv,dim=1)
+        # return y_conv
+    
+        return (nn.Sigmoid()(y_conv)).squeeze(1)
         """
             Martin: Sigmoid solo saca un mapa de probabilidades que se supone que es la probilidad
             en este caso de tener cancer. Pero la red de entrenamiento espera encontrar dos mapas
@@ -215,7 +219,7 @@ class VNet(nn.Module):
         self.deconv_2 = deconv3d_x2(128, 64)
         self.deconv_1 = deconv3d_x1(64, 32)
 
-        self.out = softmax_out(32, 2)
+        self.out = softmax_out(32, 1)
 
     def forward(self, x):
         conv_1 = self.conv_1(x)

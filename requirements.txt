@@ -7,5 +7,5 @@ SimpleITK
 matplotlib
 scikit-image
 tqdm
-tensorflow
-MedPy
+medpy
+tensorboard

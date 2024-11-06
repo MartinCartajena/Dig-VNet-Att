@@ -6,3 +6,5 @@ results/
 dataset/
 .vscode/
 logs/
+weights/
+runs/

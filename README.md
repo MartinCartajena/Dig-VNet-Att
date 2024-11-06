@@ -23,7 +23,7 @@ python /app/train_v2.py --batch_size 16 --epochs 1 --lr 0.0001 --device cuda:0 -
 
 
 # EXECUTION
-docker run -d --name vnet_v1_train_v2 --user $(id -u):$(id -g) --gpus "device=0" -v $(pwd):/app -v /media/data/mcartajena/LUCIA/Data/LUNA/:/app/data vnet_v1 python /app/train_v2.py --batch_size 16 --epochs 1 --lr 0.0001 --device cuda:0 --workers 1 --weights ./weights --logs ./logs --data_path /app/data/ --data_format npy
+docker run -d --rm --name vnet_v1_train_v2 --gpus "device=0" -v $(pwd):/app -v /media/data/mcartajena/LUCIA/Data/LUNA16/Task_LUNA16_test:/app/data vnet_v1 python /app/train_v2.py --batch_size 16 --epochs 10 --lr 0.0001 --device cuda:0 --workers 1 --weights ./weights --logs ./logs --image_path /app/data/ --data_format npy
 
 
 

@@ -9,11 +9,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-# from logger.logger import Logger as logger 
 from evaluate.loss.dice_loss import DiceLoss
 from evaluate.loss.dice_loss import dsc
-# from torch.utils.tensorboard import SummaryWriter
-
 
 import torchvision.transforms as transforms_tv
 import utils.prepare.promise12 as promise12
@@ -23,12 +20,7 @@ import models.VNet_v1 as VNet_v1
 
 def main(args):
     makedirs(args)
-    # logger = Logger("./logs/loss_logs_v2.json")
-    # snapshotargs(args)
-    
-    # writer = SummaryWriter()
 
-    
     device = torch.device("cpu" if not torch.cuda.is_available() else args.device)
 
     loader_train, loader_valid = data_loaders(args)
@@ -50,7 +42,7 @@ def main(args):
 
     step = 0
 
-    for epoch in tqdm(range(args.epochs), total=args.epochs):
+    for epoch in range(args.epochs):
         for phase in ["train", "valid"]:
             if phase == "train":
                 vnet.train()
@@ -70,15 +62,10 @@ def main(args):
                 optimizer.zero_grad()
 
                 with torch.set_grad_enabled(phase == "train"):
-                    
-                    x = x.requires_grad_(True) 
-
+                
                     y_pred = vnet(x)
-                    
-                    loss = dsc_loss(y_pred, y_true)
-                    
-                    # y_pred = torch.argmax(y_pred, dim=1)  # rompe el grafo de gradiantes...
-                    # _, y_pred = y_pred.max(1) # rompe el grafo de gradiante...
+                    loss = dsc_loss(y_pred, y_true)               
+
                     # y_true = y_true.to(dtype=torch.long)
                     # loss_function = nn.CrossEntropyLoss(reduction='mean')
                     # loss = loss_function(y_pred, y_true)
@@ -92,17 +79,7 @@ def main(args):
                         y_true_np = y_true.detach().cpu().numpy()
                         validation_true.extend(
                             [y_true_np[s] for s in range(y_true_np.shape[0])]
-                        )
-                        
-                        # if (epoch % args.vis_freq == 0) or (epoch == args.epochs - 1):
-                        #     if i * args.batch_size < args.vis_images:
-                        #         tag = "image/{}".format(i)
-                        #         num_images = args.vis_images - i * args.batch_size
-                        #         # logger.image_list_summary(
-                        #         #     tag,
-                        #         #     log_images(x, y_true, y_pred)[:num_images],
-                        #         #     step,
-                        #         # )
+                        )           
 
                     if phase == "train":
                         loss_train.append(loss.item())
@@ -110,23 +87,17 @@ def main(args):
                         optimizer.step()
 
                 if phase == "train" and (step + 1) % 10 == 0:
-                    trainF.write('{},{}\n'.format(epoch, np.mean(loss_train)))
-                    trainF.flush()
-                    # if len(loss_train) > 0:
-                    #     writer.add_scalar("Loss/train", np.mean(loss_train), epoch)
-                    # log_loss_summary(logger, loss_train, step)
                     loss_train = []
 
+            if phase == "train":
+                trainF.write('{},{}\n'.format(epoch, np.mean(loss_train)))
+                trainF.flush()
+            
             if phase == "valid":
                 
                 validF.write('{},{}\n'.format(epoch, np.mean(loss_valid)))
                 validF.flush()
-                
-                # if len(loss_valid) > 0:
-                #     writer.add_scalar("Loss/valid", np.mean(loss_valid), epoch)
 
-                # log_loss_summary(logger, loss_valid, step, prefix="val_")
-                             
                 # mean_dsc = np.mean(
                 #     dsc_per_volume(
                 #         validation_pred,
@@ -141,9 +112,7 @@ def main(args):
                         validation_true
                     )
                 )
-                
-                # logger.scalar_summary("val_dsc", mean_dsc, step)
-                
+                                
                 if mean_dsc > best_validation_dsc:
                     best_validation_dsc = mean_dsc
                     torch.save(vnet.state_dict(), os.path.join(args.weights, "vnet.pt"))
@@ -210,17 +179,14 @@ def dsc_per_volume_not_flatten(validation_pred, validation_true):
 def log_loss_summary(logger, loss, step, prefix=""):
     logger.scalar_summary(prefix + "loss", np.mean(loss), step)
 
-
 def makedirs(args):
     os.makedirs(args.weights, exist_ok=True)
     # os.makedirs(args.logs, exist_ok=True)
-
 
 def snapshotargs(args):
     args_file = os.path.join(args.logs, "args.json")
     with open(args_file, "w") as fp:
         json.dump(vars(args), fp)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

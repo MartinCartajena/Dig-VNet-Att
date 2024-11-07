@@ -10,7 +10,9 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from evaluate.loss.dice_loss import DiceLoss
+from evaluate.loss.dice_loss import SoftDiceLoss
 from evaluate.loss.dice_loss import dsc
+from evaluate.loss.dice_loss import soft_dsc
 
 import torchvision.transforms as transforms_tv
 import utils.prepare.promise12 as promise12
@@ -30,12 +32,13 @@ def main(args):
     vnet.to(device)
 
     dsc_loss = DiceLoss()
+    softdsc_loss = SoftDiceLoss()
     best_validation_dsc = 0.0
 
     optimizer = optim.Adam(vnet.parameters(), lr= args.lr)
     
-    trainF = open(os.path.join("./results/logs/", 'train_def.csv'), 'w')
-    validF = open(os.path.join("./results/logs/", 'validation_def.csv'), 'w')
+    trainF = open(os.path.join("./results/logs/", 'train.csv'), 'w')
+    validF = open(os.path.join("./results/logs/", 'validation.csv'), 'w')
 
     loss_train = []
     loss_valid = []
@@ -64,7 +67,7 @@ def main(args):
                 with torch.set_grad_enabled(phase == "train"):
                 
                     y_pred = vnet(x)
-                    loss = dsc_loss(y_pred, y_true)               
+                    loss = softdsc_loss(y_pred, y_true)               
 
                     # y_true = y_true.to(dtype=torch.long)
                     # loss_function = nn.CrossEntropyLoss(reduction='mean')
@@ -94,7 +97,6 @@ def main(args):
                 trainF.flush()
             
             if phase == "valid":
-                
                 validF.write('{},{}\n'.format(epoch, np.mean(loss_valid)))
                 validF.flush()
 
@@ -172,7 +174,7 @@ def dsc_per_volume_not_flatten(validation_pred, validation_true):
     for i in range(len(validation_true)):
         y_pred = validation_pred[i].flatten() 
         y_true = validation_true[i].flatten()
-        dsc_list.append(dsc(y_pred, y_true))
+        dsc_list.append(soft_dsc(y_pred, y_true))
         
     return dsc_list
 

@@ -171,7 +171,7 @@ class softmax_out(nn.Module):
         # y_conv = F.softmax(y_conv,dim=1)
         # return y_conv
     
-        return torch.round(nn.Sigmoid()(y_conv).squeeze(1))
+        return nn.Sigmoid()(y_conv).squeeze(1)
         """
             Martin: Sigmoid solo saca un mapa de probabilidades que se supone que es la probilidad
             en este caso de tener cancer. Pero la red de entrenamiento espera encontrar dos mapas

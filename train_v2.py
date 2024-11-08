@@ -19,6 +19,8 @@ import utils.prepare.promise12 as promise12
 from utils.prepare.load import load_npy_files_from_directory
 import models.VNet_v1 as VNet_v1
 
+from utils.prepare.dig_module import BitwiseImageTransformer
+
 
 def main(args):
     makedirs(args)
@@ -33,6 +35,7 @@ def main(args):
 
     dsc_loss = DiceLoss()
     softdsc_loss = SoftDiceLoss()
+    
     best_validation_dsc = 0.0
 
     optimizer = optim.Adam(vnet.parameters(), lr= args.lr)
@@ -56,11 +59,16 @@ def main(args):
             validation_true = []
 
             for i, data in enumerate(loaders[phase]):
+                
+
                 if phase == "train":
                     step += 1
 
                 x, y_true, id = data
                 x, y_true = x.to(device), y_true.to(device)
+                
+                dig_module = BitwiseImageTransformer(x)    
+                dig_x = dig_module.transform()
 
                 optimizer.zero_grad()
 

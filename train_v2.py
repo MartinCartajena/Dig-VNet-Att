@@ -39,8 +39,8 @@ def main(args):
 
     optimizer = optim.Adam(vnet.parameters(), lr= args.lr)
     
-    trainF = open(os.path.join("./results/logs/", 'train.csv'), 'w')
-    validF = open(os.path.join("./results/logs/", 'validation.csv'), 'w')
+    trainF = open(os.path.join("./results/logs/", 'train_images.csv'), 'w')
+    validF = open(os.path.join("./results/logs/", 'validation_images.csv'), 'w')
 
     loss_train = []
     loss_valid = []
@@ -123,7 +123,7 @@ def main(args):
                                 
                 if mean_dsc > best_validation_dsc:
                     best_validation_dsc = mean_dsc
-                    torch.save(vnet.state_dict(), os.path.join(args.weights, "vnet.pt"))
+                    torch.save(vnet.state_dict(), os.path.join(args.weights, "vnet_images.pt"))
                 loss_valid = []
 
     print("Best validation mean DSC: {:4f}".format(best_validation_dsc))

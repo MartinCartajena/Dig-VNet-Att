@@ -24,7 +24,6 @@ from utils.prepare.dig_module import BitwiseImageTransformer
 
 def main(args):
     makedirs(args)
-
     device = torch.device("cpu" if not torch.cuda.is_available() else args.device)
 
     loader_train, loader_valid = data_loaders(args)
@@ -107,7 +106,6 @@ def main(args):
             if phase == "valid":
                 validF.write('{},{}\n'.format(epoch, np.mean(loss_valid)))
                 validF.flush()
-
                 # mean_dsc = np.mean(
                 #     dsc_per_volume(
                 #         validation_pred,

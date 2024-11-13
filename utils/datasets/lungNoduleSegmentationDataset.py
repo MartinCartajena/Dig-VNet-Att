@@ -1,8 +1,8 @@
-
 import os
 import torch
 from torch.utils.data import Dataset
 import numpy as np
+import nibabel as nib
 
 class LungNoduleSegmentationDataset(Dataset):
     def __init__(
@@ -24,27 +24,29 @@ class LungNoduleSegmentationDataset(Dataset):
         self.transform = transform
         
         if split == 'train':
-            self.image_dir = os.path.join(root_dir, 'imagesTr')
-            self.label_dir = os.path.join(root_dir, 'labelsTr')
+            image_dir = os.path.join(root_dir, 'imagesTr')
+            label_dir = os.path.join(root_dir, 'labelsTr')
         elif split == 'val':
-            self.image_dir = os.path.join(root_dir, 'imagesVal')
-            self.label_dir = os.path.join(root_dir, 'labelsVal')
+            image_dir = os.path.join(root_dir, 'imagesVal')
+            label_dir = os.path.join(root_dir, 'labelsVal')
         elif split == 'test':
-            self.image_dir = os.path.join(root_dir, 'imagesTs')
-            self.label_dir = os.path.join(root_dir, 'labelsTs')
+            image_dir = os.path.join(root_dir, 'imagesTs')
+            label_dir = os.path.join(root_dir, 'labelsTs')
         else:
             raise ValueError("El parámetro split debe ser 'train', 'val' o 'test'.")
 
-        self.image_files = sorted([f for f in os.listdir(self.image_dir) if f.endswith('.npy')])
-        self.label_files = sorted([f for f in os.listdir(self.label_dir) if f.endswith('.npy')])
+        self.images = sorted([os.path.join(image_dir, f) for f in os.listdir(image_dir)])
+        self.labels = sorted([os.path.join(image_dir, f) for f in os.listdir(label_dir)])
 
-        assert len(self.image_files) == len(self.label_files), "Número de imágenes y etiquetas no coincide."
+        assert len(self.images) == len(self.labels), "Número de imágenes y etiquetas no coincide."
+    
     
     def __len__(self):
         """
         Retorna el número de muestras en el dataset.
         """
-        return len(self.image_files)
+        return len(self.images)
+    
     
     def __getitem__(self, idx):
         """
@@ -57,16 +59,18 @@ class LungNoduleSegmentationDataset(Dataset):
             image (torch.Tensor): Imagen procesada.
             label (torch.Tensor): Etiqueta (segmentación) correspondiente a la imagen.
         """
-        image_path = os.path.join(self.image_dir, self.image_files[idx])
-        label_path = os.path.join(self.label_dir, self.label_files[idx])
-
-        image = np.load(image_path)
-        label = np.load(label_path)
-
-        image = torch.from_numpy(image).float()
-        label = torch.from_numpy(label).long() 
+        if self.images[idx].endswith(".npy"):
+            image = np.load(self.images[idx])
+            label = np.load(self.labels[idx])
+  
+        elif self.images[idx].endswith(".nii.gz"):
+            image = nib.load(self.images[idx]).get_fdata()
+            label = nib.load(self.labels[idx]).get_fdata()
 
         if self.transform:
             image, label = self.transform(image, label)
+                
+        image = torch.from_numpy(image).float()
+        label = torch.from_numpy(label).long() 
 
         return image, label

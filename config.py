@@ -54,14 +54,9 @@ def get_args():
         "--logs", type=str, default="./logs", help="folder to save logs"
     )
     parser.add_argument(
-        '--image_path', 
+        '--data_path', 
         type=str, 
         default=''
     )
-    parser.add_argument(
-        '--data_format', 
-        type=str, 
-        default='mhd'
-    )  
 
     return parser.parse_args()

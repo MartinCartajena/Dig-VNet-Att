@@ -4,7 +4,7 @@ import torch
 
 
 class conv3d(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, dropout_prob=0.3):
         """
         + Instantiate modules: conv-relu-norm
         + Assign them as member variables
@@ -14,6 +14,8 @@ class conv3d(nn.Module):
         self.relu = nn.ELU(inplace=True)
         # with learnable parameters
         self.norm = nn.InstanceNorm3d(out_channels, affine=True)
+        self.dropout = nn.Dropout3d(dropout_prob) 
+
 
     def forward(self, x):
         return self.relu(self.norm(self.conv(x)))
@@ -74,17 +76,20 @@ class conv3d_x1(nn.Module):
         return z_1 + self.skip_connection(x)
 
 class deconv3d_x3(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, dropout_prob=0.3):
         super(deconv3d_x3, self).__init__()
         self.up = deconv3d_as_up(in_channels, out_channels, 2, 2)
         self.lhs_conv = conv3d(out_channels // 2, out_channels)
         self.conv_x3 = nn.Sequential(
             nn.Conv3d(2*out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
+            nn.Dropout3d(dropout_prob),
             nn.Conv3d(out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
+            nn.Dropout3d(dropout_prob),
             nn.Conv3d(out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
+            nn.Dropout3d(dropout_prob)
         )
 
     def forward(self, lhs, rhs):
@@ -94,15 +99,17 @@ class deconv3d_x3(nn.Module):
         return self.conv_x3(rhs_add)+ rhs_up
 
 class deconv3d_x2(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, dropout_prob=0.3):
         super(deconv3d_x2, self).__init__()
         self.up = deconv3d_as_up(in_channels, out_channels, 2, 2)
         self.lhs_conv = conv3d(out_channels // 2, out_channels)
         self.conv_x2= nn.Sequential(
             nn.Conv3d(2*out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
+            nn.Dropout3d(dropout_prob),
             nn.Conv3d(out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
+            nn.Dropout3d(dropout_prob),
         )
 
     def forward(self, lhs, rhs):
@@ -112,13 +119,14 @@ class deconv3d_x2(nn.Module):
         return self.conv_x2(rhs_add)+ rhs_up
 
 class deconv3d_x1(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, dropout_prob=0.3):
         super(deconv3d_x1, self).__init__()
         self.up = deconv3d_as_up(in_channels, out_channels, 2, 2)
         self.lhs_conv = conv3d(out_channels // 2, out_channels)
         self.conv_x1 = nn.Sequential(
             nn.Conv3d(2*out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
+            nn.Dropout3d(dropout_prob)
         )
 
     def forward(self, lhs, rhs):
@@ -187,7 +195,7 @@ class softmax_out(nn.Module):
                 [0.4, 0.5, 0.9]]  # Clase 1 probabilidades
             ])
             
-            _, result_ = input.max(0)
+            _, result_ = input.max(0) # funcion no complementaria, rompe el grafo de compilacion, pero que da igual al final uso softdice
             
             result_ = tensor([
                 [0, 1, 1],  
@@ -197,7 +205,6 @@ class softmax_out(nn.Module):
             
             Para conseguir esto necesitamos 
         """
-
 
 
 class VNet(nn.Module):

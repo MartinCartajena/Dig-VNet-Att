@@ -8,3 +8,5 @@ dataset/
 logs/
 weights/
 runs/
+__pycache__/
+.idea/

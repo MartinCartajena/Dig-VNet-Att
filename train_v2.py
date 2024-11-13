@@ -32,7 +32,7 @@ def main(args):
     vnet = VNet_v1.VNet()
     vnet.to(device)
 
-    dsc_loss = DiceLoss()
+    # dsc_loss = DiceLoss()
     softdsc_loss = SoftDiceLoss()
     
     best_validation_dsc = 0.0
@@ -66,8 +66,8 @@ def main(args):
                 x, y_true, id = data
                 x, y_true = x.to(device), y_true.to(device)
                 
-                dig_module = BitwiseImageTransformer(x)    
-                dig_x = dig_module.transform()
+                # dig_module = BitwiseImageTransformer(x)    
+                # dig_x = dig_module.transform()
 
                 optimizer.zero_grad()
 
@@ -143,20 +143,20 @@ def data_loaders(args):
     ])
     
     imagesTr_path = os.path.join(args.image_path, "imagesTr")
-    numpyImages = load_npy_files_from_directory(imagesTr_path)
+    numpyImages = load_npy_files_from_directory(imagesTr_path, "imagesTr")
             
     labelsTr_path = os.path.join(args.image_path, "labelsTr")
-    numpyGT = load_npy_files_from_directory(labelsTr_path)
+    numpyGT = load_npy_files_from_directory(labelsTr_path, "labelsTr")
 
     trainSet = promise12.PROMISE12(mode='train', images=numpyImages, GT=numpyGT, transform=trainTransform, data_format=args.data_format)
     loader_train = DataLoader(trainSet, batch_size=args.batch_size, shuffle=True, **kwargs)
 
 
     imagesVal_path = os.path.join(args.image_path, "imagesVal")
-    numpyImages = load_npy_files_from_directory(imagesVal_path)
+    numpyImages = load_npy_files_from_directory(imagesVal_path, "imagesVal")
             
     labelsVal_path = os.path.join(args.image_path, "labelsVal")
-    numpyGT = load_npy_files_from_directory(labelsVal_path)
+    numpyGT = load_npy_files_from_directory(labelsVal_path, "labelsVal")
             
     valSet = promise12.PROMISE12(mode='test', images=numpyImages, GT=numpyGT, transform=testTransform, data_format=args.data_format)
     loader_valid = DataLoader(valSet, batch_size=args.batch_size, shuffle=True, **kwargs)

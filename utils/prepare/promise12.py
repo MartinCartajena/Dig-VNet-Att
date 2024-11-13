@@ -31,7 +31,7 @@ class PROMISE12(data.Dataset):
             else:
                 x, y, z = image.shape 
 
-            image = image.reshape((1, z, y, x)) # added by Chao
+            image = image.reshape((1, z, y, x)) 
             image = image.astype(np.float32)
             if self.transform is not None:
                 image = torch.from_numpy(image)
@@ -48,7 +48,7 @@ class PROMISE12(data.Dataset):
                 if self.GT_transform is not None:
                     GT = self.GT_transform(GT)
                 return image, GT, id
-        elif self.mode == "infer":# added by Chao
+        elif self.mode == "infer": 
             keys = list(self.images.keys())
             id = keys[index]
             image = self.images[id]

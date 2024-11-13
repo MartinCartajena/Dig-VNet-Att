@@ -6,19 +6,19 @@ import torch
 class conv3d(nn.Module):
     def __init__(self, in_channels, out_channels, dropout_prob=0.3):
         """
-        + Instantiate modules: conv-relu-norm
+        + Instantiate modules: conv-elu-norm
         + Assign them as member variables
         """
         super(conv3d, self).__init__()
         self.conv = nn.Conv3d(in_channels, out_channels, kernel_size=5, padding=2)
-        self.relu = nn.ELU(inplace=True)
+        self.elu = nn.ELU(inplace=True)
         # with learnable parameters
         self.norm = nn.InstanceNorm3d(out_channels, affine=True)
-        self.dropout = nn.Dropout3d(dropout_prob) 
+        # self.dropout = nn.Dropout3d(dropout_prob) 
 
 
     def forward(self, x):
-        return self.relu(self.norm(self.conv(x)))
+        return self.elu(self.norm(self.conv(x)))
 
 
 class conv3d_x3(nn.Module):
@@ -83,13 +83,13 @@ class deconv3d_x3(nn.Module):
         self.conv_x3 = nn.Sequential(
             nn.Conv3d(2*out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
-            nn.Dropout3d(dropout_prob),
+            # nn.Dropout3d(dropout_prob),
             nn.Conv3d(out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
-            nn.Dropout3d(dropout_prob),
+            # nn.Dropout3d(dropout_prob),
             nn.Conv3d(out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
-            nn.Dropout3d(dropout_prob)
+            # nn.Dropout3d(dropout_prob)
         )
 
     def forward(self, lhs, rhs):
@@ -106,10 +106,10 @@ class deconv3d_x2(nn.Module):
         self.conv_x2= nn.Sequential(
             nn.Conv3d(2*out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
-            nn.Dropout3d(dropout_prob),
+            # nn.Dropout3d(dropout_prob),
             nn.Conv3d(out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
-            nn.Dropout3d(dropout_prob),
+            # nn.Dropout3d(dropout_prob),
         )
 
     def forward(self, lhs, rhs):
@@ -126,7 +126,7 @@ class deconv3d_x1(nn.Module):
         self.conv_x1 = nn.Sequential(
             nn.Conv3d(2*out_channels, out_channels,5,1,2),
             nn.ELU(inplace=True),
-            nn.Dropout3d(dropout_prob)
+            # nn.Dropout3d(dropout_prob)
         )
 
     def forward(self, lhs, rhs):

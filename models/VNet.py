@@ -208,9 +208,9 @@ class softmax_out(nn.Module):
 
 
 class VNet(nn.Module):
-    def __init__(self):
+    def __init__(self, dig_sep):
         super(VNet, self).__init__()
-        self.conv_1 = conv3d_x1(1, 16)
+        self.conv_1 = conv3d_x1(dig_sep, 16)
         self.pool_1 = conv3d_as_pool(16, 32)
         self.conv_2 = conv3d_x2(32, 32)
         self.pool_2 = conv3d_as_pool(32, 64)

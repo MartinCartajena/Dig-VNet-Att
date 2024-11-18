@@ -36,7 +36,7 @@ class LungNoduleSegmentationDataset(Dataset):
             raise ValueError("El parámetro split debe ser 'train', 'val' o 'test'.")
 
         self.images = sorted([os.path.join(image_dir, f) for f in os.listdir(image_dir)])
-        self.labels = sorted([os.path.join(image_dir, f) for f in os.listdir(label_dir)])
+        self.labels = sorted([os.path.join(label_dir, f) for f in os.listdir(label_dir)])
 
         assert len(self.images) == len(self.labels), "Número de imágenes y etiquetas no coincide."
     
@@ -68,7 +68,7 @@ class LungNoduleSegmentationDataset(Dataset):
             label = nib.load(self.labels[idx]).get_fdata()
 
         if self.transform:
-            image, label = self.transform(image, label)
+            image, label = self.transform((image, label))
                 
         image = torch.from_numpy(image).float()
         label = torch.from_numpy(label).long() 

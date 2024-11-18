@@ -54,9 +54,26 @@ def get_args():
         "--logs", type=str, default="./logs", help="folder to save logs"
     )
     parser.add_argument(
+        "--aug_scale",
+        type=int,
+        default=0.05,
+        help="scale factor range for augmentation (default: 0.05)",
+    )
+    parser.add_argument(
+        "--aug_angle",
+        type=int,
+        default=15,
+        help="rotation angle range in degrees for augmentation (default: 15)",
+    )
+    parser.add_argument(
         '--data_path', 
         type=str, 
         default=''
     )
+    parser.add_argument(
+        '--dig_sep', 
+       action='store_true'
+    )
+
 
     return parser.parse_args()

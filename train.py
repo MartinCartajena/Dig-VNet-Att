@@ -10,9 +10,6 @@ from datetime import datetime
 from utils.prepare.prepareLoss import dsc_per_volume_not_flatten
 
 from evaluate.loss.dice_loss import DiceLoss, SoftDiceLoss, dsc, soft_dsc
-import torchvision.transforms as transforms_tv
-import utils.prepare.promise12 as promise12
-from utils.prepare.load import load_npy_files_from_directory
 import models.VNet as VNet
 from utils.prepare.dig_module import BitwiseImageTransformer
 from config import get_args  
@@ -28,7 +25,11 @@ def main(args):
     loader_train, loader_valid = data_loader(args)
     loaders = {"train": loader_train, "valid": loader_valid}
 
-    vnet = VNet.VNet()
+    if args.dig_sep:
+        vnet = VNet.VNet(16)
+    else:
+        vnet = VNet.VNet(1)
+
     vnet.to(device)
 
     # dsc_loss = DiceLoss()
@@ -42,6 +43,11 @@ def main(args):
 
     trainF = open(os.path.join("./results/logs/", f'train_{actual_date}.csv'), 'w')
     validF = open(os.path.join("./results/logs/", f'validation_{actual_date}.csv'), 'w')
+    
+    """ Early stopping """
+    early_stopping_patience = 30 # args.patience  # 10
+    epochs_no_improve = 0
+    best_loss = float("inf")
 
     loss_train = []
     loss_valid = []
@@ -65,15 +71,20 @@ def main(args):
                 x, y_true = data
                 x, y_true = x.to(device), y_true.to(device)
 
-                """ Dig_Sep module: 8 bits module """
-                # dig_module = BitwiseImageTransformer(x)    
-                # dig_x = dig_module.transform()
+                if args.dig_sep:
+                    """ Dig_Sep module: 8 bits module """
+                    dig_module = BitwiseImageTransformer(x)    
+                    dig_x = dig_module.transform()
 
                 optimizer.zero_grad()
 
                 with torch.set_grad_enabled(phase == "train"):
 
-                    y_pred = vnet(x)
+                    x = x.unsqueeze(1) # convert to [16, 1, 16, 96, 96]
+                    if args.dig_sep:
+                        y_pred = vnet(dig_x)
+                    else:
+                        y_pred = vnet(x)
                     loss = softdsc_loss(y_pred, y_true)
 
                     if phase == "valid":
@@ -92,15 +103,17 @@ def main(args):
                         loss.backward()
                         optimizer.step()
 
-                if phase == "train" and (step + 1) % 10 == 0:
-                    loss_train = []
+                # if phase == "train" and (step + 1) % 10 == 0:
+                #     loss_train = []
 
             if phase == "train":
                 trainF.write('{},{}\n'.format(epoch, np.mean(loss_train)))
                 trainF.flush()
 
             if phase == "valid":
-                validF.write('{},{}\n'.format(epoch, np.mean(loss_valid)))
+                current_loss = np.mean(loss_valid)
+                
+                validF.write('{},{}\n'.format(epoch, current_loss))
                 validF.flush()
 
                 mean_dsc = np.mean(
@@ -113,8 +126,25 @@ def main(args):
                 if mean_dsc > best_validation_dsc:
                     best_validation_dsc = mean_dsc
                     torch.save(vnet.state_dict(), os.path.join(args.weights, f"vnet_{actual_date}.pt"))
+                
+                # Early stopping basado en el loss
+                if current_loss < best_loss:
+                    best_loss = current_loss
+                    epochs_no_improve = 0
+                else:
+                    epochs_no_improve += 1
+
+                if epochs_no_improve >= early_stopping_patience:
+                    print(f"Early stopping triggered at epoch {epoch}")
+                    break
+                
+                
                 loss_valid = []
 
+        # Break externo si se activa el early stopping
+        if epochs_no_improve >= early_stopping_patience:
+            break
+        
     print("Best validation mean DSC: {:4f}".format(best_validation_dsc))
     trainF.close()
     validF.close()
@@ -144,7 +174,7 @@ def datasets(args):
     train = Dataset(
         root_dir=args.data_path, 
         split='train', 
-        transform=None # transforms(scale=args.aug_scale, angle=args.aug_angle, flip_prob=0.5),
+        transform= transforms( angle=args.aug_angle, flip_prob=0.5), # scale=args.aug_scale,
     )
     valid = Dataset(
         root_dir=args.data_path,

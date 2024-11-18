@@ -27,20 +27,20 @@ class Scale(object):
         img_size = image.shape[0]
 
         scale = np.random.uniform(low=1.0 - self.scale, high=1.0 + self.scale)
+        
+        scale_tuple = (scale,) * image.ndim
 
         image = rescale(
             image,
-            (scale, scale),
-            multichannel=True,
+            scale_tuple,
             preserve_range=True,
             mode="constant",
             anti_aliasing=False,
         )
         mask = rescale(
             mask,
-            (scale, scale),
+            scale_tuple,
             order=0,
-            multichannel=True,
             preserve_range=True,
             mode="constant",
             anti_aliasing=False,

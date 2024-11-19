@@ -10,3 +10,4 @@ tqdm
 medpy
 tensorboard
 nibabel
+opencv-python

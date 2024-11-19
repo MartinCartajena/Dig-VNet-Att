@@ -16,6 +16,7 @@ from config import get_args
 
 from utils.datasets.transform import transforms
 from utils.datasets.lungNoduleSegmentationDataset import LungNoduleSegmentationDataset as Dataset
+from utils.datasets.segdataloader_v2 import LungNoduleSegmentationDataset_chino as Dataset_chino
 
 
 def main(args):
@@ -171,16 +172,28 @@ def data_loader(args):
 
 
 def datasets(args):
-    train = Dataset(
-        root_dir=args.data_path, 
-        split='train', 
-        transform= transforms( angle=args.aug_angle, flip_prob=0.5), # scale=args.aug_scale,
-    )
-    valid = Dataset(
-        root_dir=args.data_path,
-        split='val', 
-        transform=None
-    )
+    if args.chino:
+        train = Dataset_chino(
+            root_dir=args.data_path, 
+            split='train', 
+            transform= transforms( angle=args.aug_angle, flip_prob=0.5, scale=args.aug_scale),
+        )
+        valid = Dataset_chino(
+            root_dir=args.data_path,
+            split='val', 
+            transform=None
+        )
+    else:
+        train = Dataset(
+            root_dir=args.data_path, 
+            split='train', 
+            transform= transforms( angle=args.aug_angle, flip_prob=0.5, scale=args.aug_scale),
+        )
+        valid = Dataset(
+            root_dir=args.data_path,
+            split='val', 
+            transform=None
+        )
     return train, valid
 
 

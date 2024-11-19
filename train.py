@@ -11,12 +11,12 @@ from utils.prepare.prepareLoss import dsc_per_volume_not_flatten
 
 from evaluate.loss.dice_loss import DiceLoss, SoftDiceLoss, dsc, soft_dsc
 import models.VNet as VNet
+import models.Dig_Sep_VNet_CBAM as VNet_CBAM
 from utils.prepare.dig_module import BitwiseImageTransformer
 from config import get_args  
 
 from utils.datasets.transform import transforms
 from utils.datasets.lungNoduleSegmentationDataset import LungNoduleSegmentationDataset as Dataset
-from utils.datasets.segdataloader_v2 import LungNoduleSegmentationDataset_chino as Dataset_chino
 
 
 def main(args):
@@ -27,9 +27,9 @@ def main(args):
     loaders = {"train": loader_train, "valid": loader_valid}
 
     if args.dig_sep:
-        vnet = VNet.VNet(16)
+        vnet = VNet_CBAM.VNet_CBAM(16)
     else:
-        vnet = VNet.VNet(1)
+        vnet = VNet_CBAM.VNet_CBAM(1)
 
     vnet.to(device)
 
@@ -172,28 +172,16 @@ def data_loader(args):
 
 
 def datasets(args):
-    if args.chino:
-        train = Dataset_chino(
-            root_dir=args.data_path, 
-            split='train', 
-            transform= transforms( angle=args.aug_angle, flip_prob=0.5, scale=args.aug_scale),
-        )
-        valid = Dataset_chino(
-            root_dir=args.data_path,
-            split='val', 
-            transform=None
-        )
-    else:
-        train = Dataset(
-            root_dir=args.data_path, 
-            split='train', 
-            transform= transforms( angle=args.aug_angle, flip_prob=0.5, scale=args.aug_scale),
-        )
-        valid = Dataset(
-            root_dir=args.data_path,
-            split='val', 
-            transform=None
-        )
+    train = Dataset(
+        root_dir=args.data_path, 
+        split='train', 
+        transform= transforms( angle=args.aug_angle, flip_prob=0.5), # scale=args.aug_scale
+    )
+    valid = Dataset(
+        root_dir=args.data_path,
+        split='val', 
+        transform=None
+    )
     return train, valid
 
 

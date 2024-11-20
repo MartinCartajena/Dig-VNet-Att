@@ -108,15 +108,11 @@ def main(args):
                 #     loss_train = []
 
             if phase == "train":
-                trainF.write('{},{}\n'.format(epoch, np.mean(loss_train)))
+                trainF.write('{},{}\n'.format(epoch, np.round(np.mean(loss_train), 6)))
                 trainF.flush()
 
-            if phase == "valid":
-                current_loss = np.mean(loss_valid)
-                
-                validF.write('{},{}\n'.format(epoch, current_loss))
-                validF.flush()
-
+            if phase == "valid":  
+                              
                 mean_dsc = np.mean(
                     dsc_per_volume_not_flatten(
                         validation_pred,
@@ -127,6 +123,11 @@ def main(args):
                 if mean_dsc > best_validation_dsc:
                     best_validation_dsc = mean_dsc
                     torch.save(vnet.state_dict(), os.path.join(args.weights, f"vnet_{actual_date}.pt"))
+                
+                current_loss = 1 - mean_dsc
+                
+                validF.write('{},{}\n'.format(epoch, np.round(current_loss, 6)))
+                validF.flush()
                 
                 # Early stopping basado en el loss
                 if current_loss < best_loss:

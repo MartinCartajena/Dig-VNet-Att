@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 plt.switch_backend('Agg')
 
 # Nombres de los archivos CSV
-train_file = '/home/VICOMTECH/mcartajena/LUCIA/Dig-CS-VNet/vnet.pytorch/results/logs/train_20241118_092133.csv'
-validation_file = '/home/VICOMTECH/mcartajena/LUCIA/Dig-CS-VNet/vnet.pytorch/results/logs/validation_20241118_092133.csv'
+train_file = '/home/VICOMTECH/mcartajena/LUCIA/Dig-CS-VNet/vnet.pytorch/results/logs/train_20241120_001852.csv'
+validation_file = '/home/VICOMTECH/mcartajena/LUCIA/Dig-CS-VNet/vnet.pytorch/results/logs/validation_20241120_001852.csv'
 
 # Cargar los datos de los archivos CSV y verificar si se leen correctamente
 train_data = pd.read_csv(train_file, header=None, names=['epoch', 'softdice'])
@@ -30,10 +30,12 @@ plt.plot(validation_data['epoch'].values, validation_data['softdice'].values, la
 # Configurar los detalles del gráfico
 plt.xlabel('Epoch')
 plt.ylabel('Softdice')
-plt.title(f'Loss Graph / Data Aug & Dig_Sep / Best Val: {min_validation_data}')
+plt.title(f'Loss Graph / Data Aug & Dig_Sep & Att / Best Val: {min_validation_data}')
 plt.legend()
 plt.grid(True)
 
+plt.ylim(0, 1)
+
 # Guardar el gráfico como imagen
-plt.savefig('/home/VICOMTECH/mcartajena/LUCIA/Dig-CS-VNet/vnet.pytorch/results/plots/softdice_per_epoch_20241118_092133.png')
+plt.savefig('/home/VICOMTECH/mcartajena/LUCIA/Dig-CS-VNet/vnet.pytorch/results/plots/softdice_per_epoch_20241120_001852.png')
 print("El gráfico ha sido guardado como 'softdice_per_epoch.png'")

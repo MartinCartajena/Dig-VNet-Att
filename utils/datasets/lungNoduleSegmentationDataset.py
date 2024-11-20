@@ -24,14 +24,14 @@ class LungNoduleSegmentationDataset(Dataset):
         self.transform = transform
         
         if split == 'train':
-            image_dir = os.path.join(root_dir, 'imagesTr')
-            label_dir = os.path.join(root_dir, 'labelsTr')
+            image_dir = os.path.join(root_dir, 'imagesAugTr')
+            label_dir = os.path.join(root_dir, 'labelsAugTr')
         elif split == 'val':
-            image_dir = os.path.join(root_dir, 'imagesVal')
-            label_dir = os.path.join(root_dir, 'labelsVal')
+            image_dir = os.path.join(root_dir, 'imagesAugVal')
+            label_dir = os.path.join(root_dir, 'labelsAugVal')
         elif split == 'test':
-            image_dir = os.path.join(root_dir, 'imagesTs')
-            label_dir = os.path.join(root_dir, 'labelsTs')
+            image_dir = os.path.join(root_dir, 'imagesAugTs')
+            label_dir = os.path.join(root_dir, 'labelsAugTs')
         else:
             raise ValueError("El parámetro split debe ser 'train', 'val' o 'test'.")
 
@@ -39,7 +39,7 @@ class LungNoduleSegmentationDataset(Dataset):
         self.labels = sorted([os.path.join(label_dir, f) for f in os.listdir(label_dir)])
 
         assert len(self.images) == len(self.labels), "Número de imágenes y etiquetas no coincide."
-    
+        
     
     def __len__(self):
         """

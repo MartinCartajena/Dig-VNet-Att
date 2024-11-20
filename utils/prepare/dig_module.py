@@ -74,4 +74,4 @@ class BitwiseImageTransformer:
         
         output_tensor = torch.cat((dig_sep_res, expanded_tensor), dim=1)
 
-        return output_tensor  
+        return self.denormalize_from_bit8(output_tensor)  

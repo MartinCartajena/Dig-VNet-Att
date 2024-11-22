@@ -11,7 +11,7 @@ class BitwiseImageTransformer:
         """
         self.input_tensor = input_tensor
         self.original_ = input_tensor
-        self.batch_size, _, self.depth, self.height, self.width = input_tensor.shape
+        self.batch_size, self.depth, self.height, self.width = input_tensor.shape
 
     def _generate_bit_masks(self):
         """
@@ -65,10 +65,13 @@ class BitwiseImageTransformer:
         masks = self._generate_bit_masks()
         dig_sep_images = self._calculate_images(masks)
         
-        dig_original_images = [t.repeat(1, 2, 1, 1, 1) for t in dig_sep_images] # Duplicar dig_seps
-        dig_original_images.append(self.input_tensor.repeat(1, 8, 1, 1, 1))   # Añadir 8 imagenes originales 
-        output_tensor = torch.cat(dig_original_images, dim=1) # Concatenar todo en canales e la dim 1
         
-        output_tensor = self.denormalize_from_bit8(output_tensor)
+        duplicated_dig_sep_images = [torch.cat((t.unsqueeze(1), t.unsqueeze(1)), dim=1) for t in dig_sep_images]
+        
+        dig_sep_res = torch.cat([t for t in duplicated_dig_sep_images], dim=1)
+        
+        expanded_tensor = self.input_tensor.unsqueeze(1).repeat(1, 8, 1, 1, 1)
+        
+        output_tensor = torch.cat((dig_sep_res, expanded_tensor), dim=1)
 
-        return output_tensor[:, :16, :, :, :]  # Asegura el tamaño [batch_size, 16, depth, height, width]
+        return self.denormalize_from_bit8(output_tensor)  

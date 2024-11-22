@@ -9,3 +9,5 @@ scikit-image
 tqdm
 medpy
 tensorboard
+nibabel
+opencv-python

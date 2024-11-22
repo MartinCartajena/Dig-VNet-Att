@@ -16,7 +16,7 @@ validation_file = '/home/VICOMTECH/mcartajena/LUCIA/Dig-CS-VNet/vnet.pytorch/res
 train_data = pd.read_csv(train_file, header=None, names=['epoch', 'softdice'])
 validation_data = pd.read_csv(validation_file, header=None, names=['epoch', 'softdice'])
 
-min_validation_data = min(round(validation_data['softdice'], 3))
+min_validation_data = min(round(validation_data['softdice'], 4))
 
 # Imprimir los primeros datos para verificar que se han cargado correctamente
 print("Train Data Head:\n", train_data.head())
@@ -30,11 +30,11 @@ plt.plot(validation_data['epoch'].values, validation_data['softdice'].values, la
 # Configurar los detalles del gráfico
 plt.xlabel('Epoch')
 plt.ylabel('Softdice')
-plt.title(f'Loss Graph / Data Aug & Dig_Sep & Att / Best Val: {min_validation_data}')
+plt.title(f'Loss Graph / Data Aug & Dig_Sep & CBAM Att / Best Val: {min_validation_data}')
 plt.legend()
 plt.grid(True)
 
-plt.ylim(0, 1)
+plt.ylim(0, 0.5)
 
 # Guardar el gráfico como imagen
 plt.savefig('/home/VICOMTECH/mcartajena/LUCIA/Dig-CS-VNet/vnet.pytorch/results/plots/softdice_per_epoch_20241120_001852.png')

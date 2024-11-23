@@ -24,6 +24,11 @@ def get_args():
         help="initial learning rate (default: 0.001)",
     )
     parser.add_argument(
+        "--loss", 
+        type=str, 
+        default="softdice", 
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="cuda:0",
@@ -48,10 +53,16 @@ def get_args():
         help="frequency of saving images to log file (default: 10)",
     )
     parser.add_argument(
-        "--weights", type=str, default="./weights", help="folder to save weights"
+        "--weights", 
+        type=str, 
+        default="./weights", 
+        help="folder to save weights"
     )
     parser.add_argument(
-        "--logs", type=str, default="./logs", help="folder to save logs"
+        "--logs", 
+        type=str, 
+        default="./logs", 
+        help="folder to save logs"
     )
     parser.add_argument(
         "--aug_scale",
@@ -74,6 +85,7 @@ def get_args():
         '--dig_sep', 
        action='store_true'
     )
+
 
 
     return parser.parse_args()

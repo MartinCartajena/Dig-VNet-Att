@@ -26,7 +26,6 @@ def main(args):
     makedirs(args)
     device = torch.device("cpu" if not torch.cuda.is_available() else args.device)
     
-    
     actual_date = datetime.now().strftime("%Y%m%d_%H%M%S") # TODO: horario aleman... 
 
     experiment_name = f"Experiment_Segmentation_{actual_date}"
@@ -37,9 +36,9 @@ def main(args):
     loaders = {"train": loader_train, "valid": loader_valid}
 
     if args.dig_sep:
-        vnet = VNet_CBAM.VNet_CBAM(16)
+        vnet = VNet_CBAM.VNet_CBAM(16, args.loss)
     else:
-        vnet = VNet_CBAM.VNet_CBAM(1)
+        vnet = VNet_CBAM.VNet_CBAM(1, args.loss)
 
     vnet.to(device)
 
@@ -52,10 +51,8 @@ def main(args):
     else:
         raise ValueError("Invalid loss type. Choose 'softdice' or 'crossentropy'.")
 
-
     optimizer = optim.Adam(vnet.parameters(), lr=args.lr)
 
-    # Inicialización del scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, 
         mode='min', # decir que valor es el mejor, en este caso min porque es loss 
@@ -86,6 +83,8 @@ def main(args):
         step = 0
 
         for epoch in range(args.epochs):
+            if epoch == 8:
+                print("aqui estamos bien")
             for phase in ["train", "valid"]:
                 if phase == "train":
                     vnet.train()
@@ -99,7 +98,7 @@ def main(args):
                     if phase == "train":
                         step += 1
 
-                    x, y_true = data
+                    x, y_true, name = data
                     x, y_true = x.to(device), y_true.to(device)
 
                     if args.dig_sep:
@@ -120,23 +119,23 @@ def main(args):
                             
                         if phase == "train":
                             if args.loss == "crossentropy":
-                                # Convertir y_pred para que tenga logits de dos clases. Esto convierte y_pred a un tensor de shape: [batch_size, 2, 16, 96, 96]
-                                y_pred_adjusted = torch.cat([(1 - y_pred).unsqueeze(1), y_pred.unsqueeze(1)], dim=1)
-
-                                # Asegurarse de que y_true sea de tipo long
-                                y_true_adjusted = y_true.squeeze(1).long()
-                                
-                                loss = loss_function(y_pred_adjusted, y_true_adjusted)
+                                y_true_adjusted = y_true.long()
+                                loss = loss_function(y_pred, y_true_adjusted)
                             else:
                                 loss = loss_function(y_pred, y_true)
 
 
                         if phase == "valid":
-                            y_pred_np = y_pred.detach().cpu().numpy()
+                            if args.loss == "crossentropy":
+                                y_pred_np = y_pred.detach()
+                                y_true_np = y_true.detach()
+                            else:
+                                y_pred_np = y_pred.detach().cpu().numpy()
+                                y_true_np = y_true.detach().cpu().numpy()
+
                             validation_pred.extend(
                                 [y_pred_np[s] for s in range(y_pred_np.shape[0])]
                             )
-                            y_true_np = y_true.detach().cpu().numpy()
                             validation_true.extend(
                                 [y_true_np[s] for s in range(y_true_np.shape[0])]
                             )
@@ -156,40 +155,34 @@ def main(args):
                     # trainF.flush()
 
                 if phase == "valid":  
-                                
-                    mean_softdsc = np.mean(
-                        dsc_per_volume_not_flatten(
-                            validation_pred,
-                            validation_true
-                        )
-                    )
-                    print(f"Validation: Epoch {epoch} --> Softdice loss {1-mean_softdsc}")
-
-                    
+                                                    
                     if args.loss == "crossentropy":
                         validation_loss = []
                         for vp, vt in zip(validation_pred, validation_true):
-                            vp_tensor = torch.tensor(vp, device=device)
-                            vt_tensor = torch.tensor(vt, device=device)
-
-                            vt_tensor = vt_tensor.unsqueeze(0).long()
-                            vp_tensor_adjusted = torch.stack([1 - vp_tensor, vp_tensor], dim=0).unsqueeze(0)
                             
-                            print(f"vt_tensor.min(): {vt_tensor.min()}, vt_tensor.max(): {vt_tensor.max()}")
-                            print(f"vp_tensor_adjusted.shape: {vp_tensor_adjusted.shape}, vt_tensor.shape: {vt_tensor.shape}")
+                            vt_tensor = vt.unsqueeze(0).long()
+                            vp_tensor = vp.unsqueeze(0)
                             
-                            loss_value = loss_function(vp_tensor_adjusted, vt_tensor).item()
+                            loss_value = loss_function(vp_tensor, vt_tensor).item()
 
                             validation_loss.append(loss_value)
                     
                         current_loss = np.mean(validation_loss)
 
                     else:
+                        mean_softdsc = np.mean(
+                            dsc_per_volume_not_flatten(
+                                validation_pred,
+                                validation_true
+                            )
+                        )
                         current_loss = 1 - mean_softdsc
+                        
+                        mlflow.log_metric("validation_softdsc", mean_softdsc, step=epoch)
+
 
                     print(f"Validation: Epoch {epoch} --> {args.loss} loss {current_loss}")
-                    mlflow.log_metric(f"Validation{args.loss}_loss", mean_softdsc, step=epoch)
-                    mlflow.log_metric("validation_softdsc", mean_softdsc, step=epoch)
+                    mlflow.log_metric(f"Validation{args.loss}_loss", current_loss, step=epoch)
 
                     scheduler.step(current_loss)
                     current_lr = optimizer.param_groups[0]['lr']
@@ -201,13 +194,11 @@ def main(args):
                         torch.save(vnet.state_dict(), os.path.join(args.weights, f"model_{actual_date}.pt"))
                         mlflow.pytorch.log_model(vnet, "model")  # Guarda el modelo en MLflow
                     
-                    """ Para quitar: Forma antigua de llevar el loss """
-                    # validF.write('{},{}\n'.format(epoch, np.round(current_loss, 6)))
-                    # validF.flush()
+                        """ Para quitar: Forma antigua de llevar el loss """
+                        # validF.write('{},{}\n'.format(epoch, np.round(current_loss, 6)))
+                        # validF.flush()
                     
-                    # Early stopping basado en el loss
-                    if current_loss < best_validation_loss:
-                        best_validation_loss = current_loss
+                        # Early stopping basado en el loss
                         epochs_no_improve = 0
                     else:
                         epochs_no_improve += 1
@@ -238,6 +229,7 @@ def data_loader(args):
         drop_last=True,
         num_workers=args.workers
     )
+    
     loader_valid = DataLoader(
         dataset_valid,
         batch_size=args.batch_size,
@@ -252,7 +244,7 @@ def datasets(args):
     train = Dataset(
         root_dir=args.data_path, 
         split='train', 
-        transform=None # transforms( angle=args.aug_angle, flip_prob=0.5), # scale=args.aug_scale
+        transform= None # transforms( angle=args.aug_angle, flip_prob=0.5), # scale=args.aug_scale
     )
     valid = Dataset(
         root_dir=args.data_path,

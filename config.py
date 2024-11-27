@@ -41,40 +41,10 @@ def get_args():
         help="number of workers for data loading (default: 4)",
     )
     parser.add_argument(
-        "--vis_images",
-        type=int,
-        default=200,
-        help="number of visualization images to save in log file (default: 200)",
-    )
-    parser.add_argument(
-        "--vis_freq",
-        type=int,
-        default=10,
-        help="frequency of saving images to log file (default: 10)",
-    )
-    parser.add_argument(
         "--weights", 
         type=str, 
-        default="./weights", 
+        default="./weights/model.pt", 
         help="folder to save weights"
-    )
-    parser.add_argument(
-        "--logs", 
-        type=str, 
-        default="./logs", 
-        help="folder to save logs"
-    )
-    parser.add_argument(
-        "--aug_scale",
-        type=int,
-        default=0.05,
-        help="scale factor range for augmentation (default: 0.05)",
-    )
-    parser.add_argument(
-        "--aug_angle",
-        type=int,
-        default=15,
-        help="rotation angle range in degrees for augmentation (default: 15)",
     )
     parser.add_argument(
         '--data_path', 

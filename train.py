@@ -192,7 +192,7 @@ def main(args):
                     if current_loss < best_validation_loss:
                         best_validation_loss = current_loss
                         """ Seguire guardando el modelo asi, aunque tambien lo guarde en mlflow"""
-                        torch.save(vnet.state_dict(), os.path.join(args.weights, f"model_{actual_date}.pt"))
+                        torch.save(vnet.state_dict(), os.path.join(args.weights))
                         mlflow.pytorch.log_model(vnet, "model")  # Guarda el modelo en MLflow
                     
                         """ Para quitar: Forma antigua de llevar el loss """

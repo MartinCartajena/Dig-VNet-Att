@@ -24,14 +24,14 @@ class LungNoduleSegmentationDataset(Dataset):
         self.transform = transform
         
         if split == 'train':
-            image_dir = os.path.join(root_dir, 'imagesAugTr')
-            label_dir = os.path.join(root_dir, 'labelsAugTr')
+            image_dir = os.path.join(root_dir, 'imagesTr')
+            label_dir = os.path.join(root_dir, 'labelsTr')
         elif split == 'val':
-            image_dir = os.path.join(root_dir, 'imagesAugVal')
-            label_dir = os.path.join(root_dir, 'labelsAugVal')
+            image_dir = os.path.join(root_dir, 'imagesVal')
+            label_dir = os.path.join(root_dir, 'labelsVal')
         elif split == 'test':
-            image_dir = os.path.join(root_dir, 'imagesAugTs')
-            label_dir = os.path.join(root_dir, 'labelsAugTs')
+            image_dir = os.path.join(root_dir, 'imagesTs')
+            label_dir = os.path.join(root_dir, 'labelsTs')
         else:
             raise ValueError("El parámetro split debe ser 'train', 'val' o 'test'.")
 
@@ -72,5 +72,7 @@ class LungNoduleSegmentationDataset(Dataset):
                 
         image = torch.from_numpy(image).float()
         label = torch.from_numpy(label).long() 
+        
+        name = self.images[idx].split("/")[len(self.images[idx].split("/"))-1]
 
-        return image, label
+        return image, label, name

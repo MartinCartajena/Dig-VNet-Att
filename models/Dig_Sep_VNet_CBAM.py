@@ -6,13 +6,13 @@ import torch
 class ChannelAttentionModule3D(nn.Module):
     def __init__(self, in_channels, reduction_ratio=16):
         super(ChannelAttentionModule3D, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool3d(1)
+        self.avg_pool = nn.AdaptiveAvgPool3d(1) # convierte a 1 dimension la imagen. Asigna pesos port canales, lo cual tiene sentido aqui ya que entran 16 canales
         self.max_pool = nn.AdaptiveMaxPool3d(1)
 
         # Fully connected layers for reduction and expansion
         self.fc = nn.Sequential(
             nn.Linear(in_channels, in_channels // reduction_ratio, bias=False),
-            nn.ReLU(inplace=True),
+            nn.ELU(inplace=True),
             nn.Linear(in_channels // reduction_ratio, in_channels, bias=False)
         )
         self.sigmoid = nn.Sigmoid()
@@ -217,6 +217,30 @@ def deconv3d_as_up(in_channels, out_channels, kernel_size=2, stride=2):
     )
 
 
+class logitsOut(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        """
+        Última capa diseñada para trabajar con torch.nn.CrossEntropyLoss.
+
+        Parámetros:
+        - in_channels: Número de canales de entrada.
+        - out_channels: Número de clases (debe coincidir con el número de categorías).
+        """
+        super(logitsOut, self).__init__()
+        self.conv_1 = nn.Conv3d(in_channels, out_channels, kernel_size=5, padding=2)
+        self.conv_2 = nn.Conv3d(out_channels, out_channels, kernel_size=1, padding=0)
+
+    def forward(self, x):
+        """
+        Produce logits sin normalizar.
+
+        Salida:
+        Tensor con forma [batch_size, num_clases, depth, height, width].
+        """
+        # Paso por las capas convolucionales
+        y_conv = self.conv_2(self.conv_1(x))
+        return y_conv  # No se aplica activación
+
 class softmax_out(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(softmax_out, self).__init__()
@@ -258,7 +282,7 @@ class softmax_out(nn.Module):
                 [0.4, 0.5, 0.9]]  # Clase 1 probabilidades
             ])
             
-            _, result_ = input.max(0) # funcion no complementaria, rompe el grafo de compilacion, pero que da igual al final uso softdice
+            _, result_ = input.max(0) # funcion no complementaria, rompe el grafo de compilacion
             
             result_ = tensor([
                 [0, 1, 1],  
@@ -271,7 +295,7 @@ class softmax_out(nn.Module):
 
 
 class VNet_CBAM(nn.Module):
-    def __init__(self, dig_sep):
+    def __init__(self, dig_sep, loss):
         super(VNet_CBAM, self).__init__()
         # Capa inicial
         self.conv_1 = conv3d_x1(dig_sep, 16)
@@ -292,9 +316,11 @@ class VNet_CBAM(nn.Module):
         self.conv_4 = conv3d_x3(128, 128)
         self.pool_4 = conv3d_as_pool(128, 256)
         self.cbam_4 = CBAM3D(128)  
-
-        # Fondo
+        
+        # Fondo y quinta capa de attention 
         self.bottom = conv3d_x3(256, 256)
+        self.cbam_5 = CBAM3D(256) 
+
 
         # Decodificador
         self.deconv_4 = deconv3d_x3(256, 256)
@@ -303,7 +329,11 @@ class VNet_CBAM(nn.Module):
         self.deconv_1 = deconv3d_x1(64, 32)
 
         # Salida
-        self.out = softmax_out(32, 1)
+        if loss == "crossentropy":
+            self.out = logitsOut(32, 2) # no aplica sigmoid ni softmax, da dos canales de clases
+        else:
+            self.out = softmax_out(32, 1)
+
 
     def forward(self, x):
         # Encoder con CBAM y pooling
@@ -325,9 +355,10 @@ class VNet_CBAM(nn.Module):
 
         # Fondo
         bottom = self.bottom(pool_4)
+        attention_5 = self.cbam_5(bottom)
 
         # Decoder utilizando skip connections con CBAM
-        deconv_4 = self.deconv_4(attention_4, bottom)
+        deconv_4 = self.deconv_4(attention_4, attention_5)
         deconv_3 = self.deconv_3(attention_3, deconv_4)
         deconv_2 = self.deconv_2(attention_2, deconv_3)
         deconv_1 = self.deconv_1(attention_1, deconv_2)

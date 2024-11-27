@@ -73,5 +73,6 @@ class BitwiseImageTransformer:
         expanded_tensor = self.input_tensor.unsqueeze(1).repeat(1, 8, 1, 1, 1)
         
         output_tensor = torch.cat((dig_sep_res, expanded_tensor), dim=1)
-
+        # distancia_max = 2 * (x[5,:,:,:].numel() ** 0.5)
+        # (torch.norm(x[5,:,:,:] - dig_x[5,14,:,:,:]) / distancia_max).item()
         return self.denormalize_from_bit8(output_tensor)  

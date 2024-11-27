@@ -26,7 +26,6 @@ def main(args):
     makedirs(args)
     device = torch.device("cpu" if not torch.cuda.is_available() else args.device)
     
-    
     actual_date = datetime.now().strftime("%Y%m%d_%H%M%S") # TODO: horario aleman... 
 
     experiment_name = f"Experiment_Segmentation_{actual_date}"
@@ -37,19 +36,31 @@ def main(args):
     loaders = {"train": loader_train, "valid": loader_valid}
 
     if args.dig_sep:
-        vnet = VNet_CBAM.VNet_CBAM(16)
+        vnet = VNet_CBAM.VNet_CBAM(16, args.loss)
     else:
-        vnet = VNet_CBAM.VNet_CBAM(1)
+        vnet = VNet_CBAM.VNet_CBAM(1, args.loss)
 
     vnet.to(device)
 
-    # dsc_loss = DiceLoss()
-    softdsc_loss = SoftDiceLoss()
-
-    best_validation_dsc = 0.0
+    if args.loss == "softdice":
+        loss_function = SoftDiceLoss()
+    elif args.loss == "crossentropy":
+        loss_function = torch.nn.CrossEntropyLoss()
+    elif args.loss == "dice":
+        print(f"Dice no esta hecho todavia por problemas de diferenciabilidad...")
+    else:
+        raise ValueError("Invalid loss type. Choose 'softdice' or 'crossentropy'.")
 
     optimizer = optim.Adam(vnet.parameters(), lr=args.lr)
-    
+
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, 
+        mode='min', # decir que valor es el mejor, en este caso min porque es loss 
+        factor=0.1, # multiplicador
+        patience=10, # num de epocas hasta que cambia el lr
+        verbose=True # imprimir mensajes cuando lr cambia, aun y todo lo meto en mlflow
+    )
+
     """ Para quitar: Forma antigua de llevar el loss """
     # trainF = open(os.path.join("./results/logs/", f'train_{actual_date}.csv'), 'w')
     # validF = open(os.path.join("./results/logs/", f'validation_{actual_date}.csv'), 'w')
@@ -57,10 +68,9 @@ def main(args):
     """ Early stopping """
     early_stopping_patience = 30 # args.patience  # 10
     epochs_no_improve = 0
-    best_loss = float("inf")
+    best_validation_loss = float("inf")
 
     loss_train = []
-    loss_valid = []
 
     with mlflow.start_run():
         
@@ -68,10 +78,13 @@ def main(args):
         mlflow.log_param("learning_rate", args.lr)
         mlflow.log_param("batch_size", args.batch_size)
         mlflow.log_param("dig_sep", args.dig_sep)
-        
+        mlflow.log_param("loss_function", args.loss)
+
         step = 0
 
         for epoch in range(args.epochs):
+            if epoch == 8:
+                print("aqui estamos bien")
             for phase in ["train", "valid"]:
                 if phase == "train":
                     vnet.train()
@@ -85,7 +98,7 @@ def main(args):
                     if phase == "train":
                         step += 1
 
-                    x, y_true = data
+                    x, y_true, name = data
                     x, y_true = x.to(device), y_true.to(device)
 
                     if args.dig_sep:
@@ -98,20 +111,31 @@ def main(args):
                     with torch.set_grad_enabled(phase == "train"):
 
                         x = x.unsqueeze(1) # convert to [16, 1, 16, 96, 96]
+                        
                         if args.dig_sep:
                             y_pred = vnet(dig_x)
                         else:
                             y_pred = vnet(x)
                             
-                        loss = softdsc_loss(y_pred, y_true)
+                        if phase == "train":
+                            if args.loss == "crossentropy":
+                                y_true_adjusted = y_true.long()
+                                loss = loss_function(y_pred, y_true_adjusted)
+                            else:
+                                loss = loss_function(y_pred, y_true)
+
 
                         if phase == "valid":
-                            loss_valid.append(loss.item())
-                            y_pred_np = y_pred.detach().cpu().numpy()
+                            if args.loss == "crossentropy":
+                                y_pred_np = y_pred.detach()
+                                y_true_np = y_true.detach()
+                            else:
+                                y_pred_np = y_pred.detach().cpu().numpy()
+                                y_true_np = y_true.detach().cpu().numpy()
+
                             validation_pred.extend(
                                 [y_pred_np[s] for s in range(y_pred_np.shape[0])]
                             )
-                            y_true_np = y_true.detach().cpu().numpy()
                             validation_true.extend(
                                 [y_true_np[s] for s in range(y_true_np.shape[0])]
                             )
@@ -123,42 +147,58 @@ def main(args):
 
                 if phase == "train":
                     epoch_loss = np.round(np.mean(loss_train), 6)
-                    print(f"Train: Epoch {epoch} --> Loss {epoch_loss}")
-                    mlflow.log_metric(f"train_loss", epoch_loss, step=epoch)
+                    print(f"Train: Epoch {epoch} --> {args.loss} loss {epoch_loss}")
+                    mlflow.log_metric(f"Train_{args.loss}_loss", epoch_loss, step=epoch)
                     
                     """ Para quitar: Forma antigua de llevar el loss """
                     # trainF.write('{},{}\n'.format(epoch, np.round(np.mean(loss_train), 6)))
                     # trainF.flush()
 
                 if phase == "valid":  
-                                
-                    mean_dsc = np.mean(
-                        dsc_per_volume_not_flatten(
-                            validation_pred,
-                            validation_true
-                        )
-                    )
+                                                    
+                    if args.loss == "crossentropy":
+                        validation_loss = []
+                        for vp, vt in zip(validation_pred, validation_true):
+                            
+                            vt_tensor = vt.unsqueeze(0).long()
+                            vp_tensor = vp.unsqueeze(0)
+                            
+                            loss_value = loss_function(vp_tensor, vt_tensor).item()
+
+                            validation_loss.append(loss_value)
                     
-                    current_loss = 1 - mean_dsc
+                        current_loss = np.mean(validation_loss)
 
-                    print(f"Validation: Epoch {epoch} --> Loss {current_loss}")
-                    mlflow.log_metric("validation_dsc", mean_dsc, step=epoch)
+                    else:
+                        mean_softdsc = np.mean(
+                            dsc_per_volume_not_flatten(
+                                validation_pred,
+                                validation_true
+                            )
+                        )
+                        current_loss = 1 - mean_softdsc
+                        
+                        mlflow.log_metric("validation_softdsc", mean_softdsc, step=epoch)
 
-                    if mean_dsc > best_validation_dsc:
-                        best_validation_dsc = mean_dsc
+
+                    print(f"Validation: Epoch {epoch} --> {args.loss} loss {current_loss}")
+                    mlflow.log_metric(f"Validation{args.loss}_loss", current_loss, step=epoch)
+
+                    scheduler.step(current_loss)
+                    current_lr = optimizer.param_groups[0]['lr']
+                    mlflow.log_metric("learning_rate", current_lr, step=epoch)
+
+                    if current_loss < best_validation_loss:
+                        best_validation_loss = current_loss
                         """ Seguire guardando el modelo asi, aunque tambien lo guarde en mlflow"""
-                        torch.save(vnet.state_dict(), os.path.join(args.weights, f"vnet_{actual_date}.pt"))
+                        torch.save(vnet.state_dict(), os.path.join(args.weights, f"model_{actual_date}.pt"))
                         mlflow.pytorch.log_model(vnet, "model")  # Guarda el modelo en MLflow
                     
-                    mlflow.log_metric(f"validation_loss", current_loss, step=epoch)
-
-                    """ Para quitar: Forma antigua de llevar el loss """
-                    # validF.write('{},{}\n'.format(epoch, np.round(current_loss, 6)))
-                    # validF.flush()
+                        """ Para quitar: Forma antigua de llevar el loss """
+                        # validF.write('{},{}\n'.format(epoch, np.round(current_loss, 6)))
+                        # validF.flush()
                     
-                    # Early stopping basado en el loss
-                    if current_loss < best_loss:
-                        best_loss = current_loss
+                        # Early stopping basado en el loss
                         epochs_no_improve = 0
                     else:
                         epochs_no_improve += 1
@@ -166,16 +206,13 @@ def main(args):
                     if epochs_no_improve >= early_stopping_patience:
                         print(f"Early stopping triggered at epoch {epoch}")
                         break
-                    
-                    
-                    loss_valid = []
-
+                                   
             # Break externo si se activa el early stopping
             if epochs_no_improve >= early_stopping_patience:
                 break
             
-        print("Best validation mean DSC: {:4f}".format(best_validation_dsc))
-        mlflow.log_metric("best_validation_dsc", best_validation_dsc) 
+        print("Best validation loss: {:4f}".format(best_validation_loss))
+        mlflow.log_metric(f"best_validation_{args.loss}_loss", best_validation_loss) 
 
         """ Para quitar: Forma antigua de llevar el loss """
         # trainF.close()
@@ -192,6 +229,7 @@ def data_loader(args):
         drop_last=True,
         num_workers=args.workers
     )
+    
     loader_valid = DataLoader(
         dataset_valid,
         batch_size=args.batch_size,
@@ -206,7 +244,7 @@ def datasets(args):
     train = Dataset(
         root_dir=args.data_path, 
         split='train', 
-        transform= transforms( angle=args.aug_angle, flip_prob=0.5), # scale=args.aug_scale
+        transform= None # transforms( angle=args.aug_angle, flip_prob=0.5), # scale=args.aug_scale
     )
     valid = Dataset(
         root_dir=args.data_path,

@@ -1,36 +1,33 @@
+# Lung Nodule Segmentation with an Improved V-Net
 
-docker build -t vnet_v1 .
+This repository contains a replication of the **Lung Nodule Segmentation** model described in the paper:  
+**"An improved V-Net lung nodule segmentation model based on pixel threshold separation and attention mechanism."**  
 
-# TRAIN COMMAND: train.py
+The objective of this work is to replicate and study the performance of the proposed model, leveraging its enhancements for precise segmentation of pulmonary nodules. The paper's innovations include:  
 
-LOCAL
-docker run -d --rm --name vnet_v1_train -v "$(pwd):/app" -v "C:/Data/Dig-CS-VNet/Task_LUNA16_test:/app/data" vnet_v1 python /app/main.py --batchSz 1 --dice --nEpochs 300 --opt adam --no-cuda --data_format npy --data_path /app/data/ --infer_data_path /app/data/
+- **Pixel Threshold Separation:** A preprocessing step that improves segmentation accuracy by refining boundary delineation.  
+- **Attention Mechanism:** Enhances the model's focus on critical regions, ensuring better performance in complex medical images.
 
-CPUHL00003 --> GPU 0
-docker run -d --user $(id -u):$(id -g) --rm --name vnet_v1_train_v2 --gpus "device=0" -v $(pwd):/app -v /media/data/mcartajena/LUCIA/Data/LUNA/:/app/data vnet_v1 python /app/main.py --batchSz 1 --dice --nEpochs 300 --loss CE --opt adam --data_format npy --data_path /app/data/ --infer_data_path /app/data/
+By implementing this model, we aim to validate its efficacy and explore potential applications in clinical and research settings.
 
-CPUHL00003 --> NO GPU
-docker run --user $(id -u):$(id -g) --rm --name vnet_v1_train_2 -v $(pwd):/app -v /media/data/mcartajena/LUCIA/Data/LUNA/:/app/data vnet_v1 python /app/main.py --batchSz 1 --dice --no-cuda --nEpochs 300 --opt adam --data_format npy --data_path /app/data/ --infer_data_path /app/data/
+---
 
+## Repository Structure  
 
-# TRAIN COMMAND: train_v2.py 
+- **`models/`**: Contains the implementation of the models arquitecture.  
+- **`evaluate/`**: evaluation functions...
+- **`utils/`**: util functions... 
 
-# DEBUG
-docker run --rm -it --gpus "device=0" --name vnet_v1_train_v2 -v $(pwd):/app -v /media/data/mcartajena/LUCIA/Data/LUNA/:/app/data vnet_v1 /bin/bash
+---
 
+## Requirements  
 
-python /app/train_v2.py --batch_size 16 --epochs 1 --lr 0.0001 --device cuda:0 --workers 4 --vis --data_path /app/data/
+To run this project, ensure you have the following installed:  
 
+- Python 3.9+  
+- PyTorch (tested with version 2.0.0)  
+- Other dependencies listed in `requirements.txt`.  
 
-# EXECUTION
-docker run -d --rm --name vnet_v1_train --gpus "device=0" -v $(pwd):/app -v /media/data/mcartajena/LUCIA/Data/LUNA16/Task_LUNA16_test:/app/data vnet_v1 python /app/train_v2.py --batch_size 16 --epochs 500 --lr 0.0001 --device cuda:0 --workers 1 --weights ./weights --logs ./logs --image_path /app/data/ --data_format npy
-
-
-
-
-
-
-
-
-
-
+Install the dependencies with:  
+```bash
+pip install -r requirements.txt

@@ -8,3 +8,7 @@ dataset/
 logs/
 weights/
 runs/
+__pycache__/
+.idea/
+mlruns/
+README_EXEC.md

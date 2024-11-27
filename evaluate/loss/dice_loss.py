@@ -44,15 +44,11 @@ def dsc(y_pred, y_true, lcc=True):
     return np.sum(y_pred[y_true == 1]) * 2.0 / (np.sum(y_pred) + np.sum(y_true))
 
 
-def soft_dsc(y_pred, y_true, lcc=True):
+def soft_dsc(y_pred, y_true, lcc=False):
     if lcc and np.any(y_pred):
-        y_pred_bin = np.round(y_pred).astype(int)  
-        y_true_bin = np.round(y_true).astype(int)
-        
-        if np.any(y_pred_bin):  
-            y_pred_bin = largest_connected_component(y_pred_bin)
+        y_pred = largest_connected_component(y_pred)
 
-        y_pred = y_pred_bin.astype(float)
+        y_pred = y_pred.astype(float)
     
     intersection = np.sum(y_pred * y_true)
     denominator = np.sum(y_pred) + np.sum(y_true)

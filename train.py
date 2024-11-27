@@ -47,6 +47,7 @@ def main(args):
     elif args.loss == "crossentropy":
         loss_function = torch.nn.CrossEntropyLoss()
     elif args.loss == "dice":
+        # TODO: si encuentras alguna manera de no romper el grafo de grands de torch para el backpropagation
         print(f"Dice no esta hecho todavia por problemas de diferenciabilidad...")
     else:
         raise ValueError("Invalid loss type. Choose 'softdice' or 'crossentropy'.")
@@ -244,7 +245,12 @@ def datasets(args):
     train = Dataset(
         root_dir=args.data_path, 
         split='train', 
-        transform= None # transforms( angle=args.aug_angle, flip_prob=0.5), # scale=args.aug_scale
+        transform= transforms(
+                        angle=30,
+                        flip_prob=0.5,
+                        vertical_flip_prob=0.5,
+                        salt_pepper_prob={'prob': 0.25, 'amount': 0.05, 'salt_ratio': 0.5}
+                    )
     )
     valid = Dataset(
         root_dir=args.data_path,

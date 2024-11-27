@@ -3,61 +3,19 @@ from skimage.transform import rescale, rotate
 from torchvision.transforms import Compose
 
 
-def transforms(scale=None, angle=None, flip_prob=None):
+def transforms(angle=None, horizontal_flip_prob=None, vertical_flip_prob=None, salt_pepper_prob=None):
     transform_list = []
 
-    if scale is not None:
-        transform_list.append(Scale(scale))
     if angle is not None:
         transform_list.append(Rotate(angle))
-    if flip_prob is not None:
-        transform_list.append(HorizontalFlip(flip_prob))
+    if horizontal_flip_prob is not None:
+        transform_list.append(HorizontalFlip(horizontal_flip_prob))
+    if vertical_flip_prob is not None:
+        transform_list.append(VerticalFlip(vertical_flip_prob))
+    if salt_pepper_prob is not None:
+        transform_list.append(SaltAndPepper(prob=salt_pepper_prob['prob'], amount=salt_pepper_prob['amount'], salt_ratio=salt_pepper_prob['salt_ratio']))
 
     return Compose(transform_list)
-
-
-class Scale(object):
-
-    def __init__(self, scale):
-        self.scale = scale
-
-    def __call__(self, sample):
-        image, mask = sample
-
-        img_size = image.shape[0]
-
-        scale = np.random.uniform(low=1.0 - self.scale, high=1.0 + self.scale)
-        
-        scale_tuple = (scale,) * image.ndim
-
-        image = rescale(
-            image,
-            scale_tuple,
-            preserve_range=True,
-            mode="constant",
-            anti_aliasing=False,
-        )
-        mask = rescale(
-            mask,
-            scale_tuple,
-            order=0,
-            preserve_range=True,
-            mode="constant",
-            anti_aliasing=False,
-        )
-
-        if scale < 1.0:
-            diff = (img_size - image.shape[0]) / 2.0
-            padding = ((int(np.floor(diff)), int(np.ceil(diff))),) * 2 + ((0, 0),)
-            image = np.pad(image, padding, mode="constant", constant_values=0)
-            mask = np.pad(mask, padding, mode="constant", constant_values=0)
-        else:
-            x_min = (image.shape[0] - img_size) // 2
-            x_max = x_min + img_size
-            image = image[x_min:x_max, x_min:x_max, ...]
-            mask = mask[x_min:x_max, x_min:x_max, ...]
-
-        return image, mask
 
 
 class Rotate(object):
@@ -91,3 +49,49 @@ class HorizontalFlip(object):
         mask = np.fliplr(mask).copy()
 
         return image, mask
+    
+    
+class VerticalFlip(object):
+    
+    def __init__(self, flip_prob):
+        self.flip_prob = flip_prob
+
+    def __call__(self, sample):
+        image, mask = sample
+
+        if np.random.rand() > self.flip_prob:
+            return image, mask
+
+        image = np.flipud(image).copy()
+        mask = np.flipud(mask).copy()
+
+        return image, mask
+
+
+class SaltAndPepper(object):
+    
+    def __init__(self, prob, amount, salt_ratio):
+        self.prob = prob
+        self.amount = amount
+        self.salt_ratio = salt_ratio
+
+    def __call__(self, sample):
+        image, mask = sample
+        
+        if np.random.rand() > self.prob:
+            return image, mask
+        
+        num_pixels = int(self.amount * image.size)
+
+        # Salt noise (white pixels)
+        num_salt = int(self.salt_ratio * num_pixels)
+        coords_salt = [np.random.randint(0, i, num_salt) for i in image.shape]
+        image[coords_salt] = 1
+
+        # Pepper noise (black pixels)
+        num_pepper = num_pixels - num_salt
+        coords_pepper = [np.random.randint(0, i, num_pepper) for i in image.shape]
+        image[coords_pepper] = 0
+
+        return image, mask
+

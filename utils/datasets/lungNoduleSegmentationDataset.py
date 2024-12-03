@@ -405,7 +405,12 @@ class LungNoduleSegmentationDataset(Dataset):
             label = self.cache_labels[idx]
             
             if self.transform:
+                image = image.cpu().numpy()
+                label = label.cpu().numpy()
                 image, label = self.transform((image, label))
+                
+                image = torch.from_numpy(image).float()
+                label = torch.from_numpy(label).long() 
 
             return image, label
 

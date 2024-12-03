@@ -3,11 +3,11 @@ from skimage.transform import rescale, rotate
 from torchvision.transforms import Compose
 
 
-def transforms(angle=None, horizontal_flip_prob=None, vertical_flip_prob=None, salt_pepper_prob=None):
+def transforms(rot_prob=None, horizontal_flip_prob=None, vertical_flip_prob=None, salt_pepper_prob=None):
     transform_list = []
 
-    if angle is not None:
-        transform_list.append(Rotate(angle))
+    if rot_prob is not None:
+        transform_list.append(Rotate(rot_prob))
     if horizontal_flip_prob is not None:
         transform_list.append(HorizontalFlip(horizontal_flip_prob))
     if vertical_flip_prob is not None:
@@ -20,18 +20,33 @@ def transforms(angle=None, horizontal_flip_prob=None, vertical_flip_prob=None, s
 
 class Rotate(object):
 
-    def __init__(self, angle):
-        self.angle = angle
+    def __init__(self, rot_prob):
+        self.rot_prob = rot_prob
+        self.angle = 90 
 
     def __call__(self, sample):
         image, mask = sample
+        
+        if np.random.rand() > self.rot_prob:
+            return image, mask
+        
+        angle = (int(np.random.rand()) + 1) * self.angle
+        
+         # Rotamos sobre los ejes y, z (dimensiones 1 y 2) sin afectar la dimensión 0
+        image_rotated = np.array([
+            rotate(slice_2d, angle, resize=False, preserve_range=True, mode="constant")
+            for slice_2d in image
+        ])
+        mask_rotated = np.array([
+            rotate(slice_2d, angle, resize=False, order=0, preserve_range=True, mode="constant")
+            for slice_2d in mask
+        ])
 
-        angle = np.random.uniform(low=-self.angle, high=self.angle)
-        image = rotate(image, angle, resize=False, preserve_range=True, mode="constant")
-        mask = rotate(
-            mask, angle, resize=False, order=0, preserve_range=True, mode="constant"
-        )
-        return image, mask
+        # Garantizamos que la forma de las imágenes no cambia recortándolas al tamaño original
+        image_cropped = image_rotated[:, :image.shape[1], :image.shape[2]]
+        mask_cropped = mask_rotated[:, :mask.shape[1], :mask.shape[2]]
+
+        return image_cropped, mask_cropped
 
 
 class HorizontalFlip(object):
@@ -86,12 +101,12 @@ class SaltAndPepper(object):
         # Salt noise (white pixels)
         num_salt = int(self.salt_ratio * num_pixels)
         coords_salt = [np.random.randint(0, i, num_salt) for i in image.shape]
-        image[coords_salt] = 1
+        image[tuple(coords_salt)] = 1
 
         # Pepper noise (black pixels)
         num_pepper = num_pixels - num_salt
         coords_pepper = [np.random.randint(0, i, num_pepper) for i in image.shape]
-        image[coords_pepper] = 0
+        image[tuple(coords_pepper)] = 0
 
         return image, mask
 

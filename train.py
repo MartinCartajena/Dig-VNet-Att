@@ -20,6 +20,7 @@ import mlflow.pytorch
 
 from utils.datasets.transform import transforms
 from utils.datasets.lungNoduleSegmentationDataset import LungNoduleSegmentationDataset as Dataset
+from utils.prepare.data_augmentation import DataAugmentation
 
 
 def main(args):
@@ -31,9 +32,30 @@ def main(args):
     experiment_name = f"Experiment_Segmentation_{actual_date}"
     mlflow.set_experiment(experiment_name)
 
+    dataset_train, dataset_valid = datasets(args)
 
-    loader_train, loader_valid = data_loader(args)
-    loaders = {"train": loader_train, "valid": loader_valid}
+    """ INIT preprcesado en cache y aumento de datos en cache """
+    if args.preprocess:
+        
+        try:
+            loader_train, loader_val = data_loader(args, dataset_train, dataset_valid, preprocess=True)
+
+            for idx, data in enumerate(loader_train):
+                print("Preprocess train:", idx)
+
+            for idx, data in enumerate(loader_val):
+                print("Preprocess val:", idx)
+                
+            dataset_train.setCache(True)
+            dataset_valid.setCache(True)
+        except Exception as e:
+            print(f"Error en DataLoader: {e}")
+
+    """ FIN preprcesado y aumento de datos en cache """
+
+    loader_train, loader_val = data_loader(args, dataset_train, dataset_valid)
+    loaders = {"train": loader_train, "valid": loader_val}
+    
 
     if args.dig_sep:
         vnet = VNet_CBAM.VNet_CBAM(16, args.loss)
@@ -62,10 +84,6 @@ def main(args):
         verbose=True # imprimir mensajes cuando lr cambia, aun y todo lo meto en mlflow
     )
 
-    """ Para quitar: Forma antigua de llevar el loss """
-    # trainF = open(os.path.join("./results/logs/", f'train_{actual_date}.csv'), 'w')
-    # validF = open(os.path.join("./results/logs/", f'validation_{actual_date}.csv'), 'w')
-    
     """ Early stopping """
     early_stopping_patience = 30 # args.patience  # 10
     epochs_no_improve = 0
@@ -84,8 +102,6 @@ def main(args):
         step = 0
 
         for epoch in range(args.epochs):
-            if epoch == 8:
-                print("aqui estamos bien")
             for phase in ["train", "valid"]:
                 if phase == "train":
                     vnet.train()
@@ -99,7 +115,7 @@ def main(args):
                     if phase == "train":
                         step += 1
 
-                    x, y_true, name = data
+                    x, y_true = data
                     x, y_true = x.to(device), y_true.to(device)
 
                     if args.dig_sep:
@@ -150,10 +166,7 @@ def main(args):
                     epoch_loss = np.round(np.mean(loss_train), 6)
                     print(f"Train: Epoch {epoch} --> {args.loss} loss {epoch_loss}")
                     mlflow.log_metric(f"Train_{args.loss}_loss", epoch_loss, step=epoch)
-                    
-                    """ Para quitar: Forma antigua de llevar el loss """
-                    # trainF.write('{},{}\n'.format(epoch, np.round(np.mean(loss_train), 6)))
-                    # trainF.flush()
+                    loss_train = []             
 
                 if phase == "valid":  
                                                     
@@ -169,6 +182,16 @@ def main(args):
                             validation_loss.append(loss_value)
                     
                         current_loss = np.mean(validation_loss)
+                        
+                        mean_softdsc = np.mean(
+                            dsc_per_volume_not_flatten(
+                                validation_pred,
+                                validation_true
+                            )
+                        )
+                        
+                        mlflow.log_metric("Softdice", mean_softdsc, step=epoch)
+
 
                     else:
                         mean_softdsc = np.mean(
@@ -183,7 +206,7 @@ def main(args):
 
 
                     print(f"Validation: Epoch {epoch} --> {args.loss} loss {current_loss}")
-                    mlflow.log_metric(f"Validation{args.loss}_loss", current_loss, step=epoch)
+                    mlflow.log_metric(f"Validation_{args.loss}_loss", current_loss, step=epoch)
 
                     scheduler.step(current_loss)
                     current_lr = optimizer.param_groups[0]['lr']
@@ -192,15 +215,10 @@ def main(args):
                     if current_loss < best_validation_loss:
                         best_validation_loss = current_loss
                         """ Seguire guardando el modelo asi, aunque tambien lo guarde en mlflow"""
-                        torch.save(vnet.state_dict(), os.path.join(args.weights))
-                        mlflow.pytorch.log_model(vnet, "model")  # Guarda el modelo en MLflow
+                        torch.save(vnet.state_dict(), os.path.join(args.weights, args.weights_name))
+                        mlflow.pytorch.log_model(vnet, "model")  # Guarda el modelo en MLflow                
                     
-                        """ Para quitar: Forma antigua de llevar el loss """
-                        # validF.write('{},{}\n'.format(epoch, np.round(current_loss, 6)))
-                        # validF.flush()
-                    
-                        # Early stopping basado en el loss
-                        epochs_no_improve = 0
+                        epochs_no_improve = 0  # Early stopping basado en el loss
                     else:
                         epochs_no_improve += 1
 
@@ -215,28 +233,42 @@ def main(args):
         print("Best validation loss: {:4f}".format(best_validation_loss))
         mlflow.log_metric(f"best_validation_{args.loss}_loss", best_validation_loss) 
 
-        """ Para quitar: Forma antigua de llevar el loss """
-        # trainF.close()
-        # validF.close()
 
 
-def data_loader(args):
-    dataset_train, dataset_valid = datasets(args)
+########################################################################## DATASET & DATALOADER ##########################################################################
 
-    loader_train = DataLoader(
-        dataset_train,
-        batch_size=args.batch_size,
-        shuffle=True,
-        drop_last=True,
-        num_workers=args.workers
-    )
-    
-    loader_valid = DataLoader(
-        dataset_valid,
-        batch_size=args.batch_size,
-        drop_last=False,
-        num_workers=args.workers
-    )
+def data_loader(args, dataset_train, dataset_valid, preprocess=False):
+
+    if preprocess:
+        loader_train = DataLoader(
+            dataset_train,
+            batch_size=args.batch_size,
+            shuffle=False,
+            drop_last=False,
+            num_workers=0
+        )
+        
+        loader_valid = DataLoader(
+            dataset_valid,
+            batch_size=args.batch_size,
+            drop_last=False,
+            num_workers=0
+        )
+    else:
+        loader_train = DataLoader(
+            dataset_train,
+            batch_size=args.batch_size,
+            shuffle=True,
+            drop_last=False,
+            num_workers=args.workers
+        )
+        
+        loader_valid = DataLoader(
+            dataset_valid,
+            batch_size=args.batch_size,
+            drop_last=False,
+            num_workers=args.workers
+        )
 
     return loader_train, loader_valid
 
@@ -245,19 +277,27 @@ def datasets(args):
     train = Dataset(
         root_dir=args.data_path, 
         split='train', 
-        transform= transforms(
-                        angle=30,
-                        flip_prob=0.5,
-                        vertical_flip_prob=0.5,
-                        salt_pepper_prob={'prob': 0.25, 'amount': 0.05, 'salt_ratio': 0.5}
-                    )
+        preprocess=args.preprocess,
+        # transform= transforms(
+        #                 angle=30,
+        #                 horizontal_flip_prob=0.5,
+        #                 vertical_flip_prob=0.5,
+        #                 salt_pepper_prob={'prob': 0.25, 'amount': 0.05, 'salt_ratio': 0.5}
+        #             )
+        transform=None,
+        data_aug=DataAugmentation(noise_amount=0.03, salt_ratio=0.5)
     )
+    
     valid = Dataset(
         root_dir=args.data_path,
         split='val', 
+        preprocess=args.preprocess,
         transform=None
     )
     return train, valid
+
+
+########################################################################## INIT ##########################################################################
 
 
 def makedirs(args):

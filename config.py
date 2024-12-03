@@ -43,8 +43,13 @@ def get_args():
     parser.add_argument(
         "--weights", 
         type=str, 
-        default="./weights/model.pt", 
+        default="./weights", 
         help="folder to save weights"
+    )
+    parser.add_argument(
+        "--weights_name", 
+        type=str, 
+        default="model.pt", 
     )
     parser.add_argument(
         '--data_path', 

@@ -278,13 +278,12 @@ def datasets(args):
         root_dir=args.data_path, 
         split='train', 
         preprocess=args.preprocess,
-        # transform= transforms(
-        #                 angle=30,
-        #                 horizontal_flip_prob=0.5,
-        #                 vertical_flip_prob=0.5,
-        #                 salt_pepper_prob={'prob': 0.25, 'amount': 0.05, 'salt_ratio': 0.5}
-        #             )
-        transform=None,
+        transform=transforms(
+                        rot_prob=0.5,
+                        horizontal_flip_prob=0.5,
+                        vertical_flip_prob=0.5,
+                        salt_pepper_prob={'prob': 0.1, 'amount': 0.01, 'salt_ratio': 0.5}
+                    ),
         data_aug=DataAugmentation(noise_amount=0.03, salt_ratio=0.5)
     )
     

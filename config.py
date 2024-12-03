@@ -52,6 +52,10 @@ def get_args():
         default=''
     )
     parser.add_argument(
+        '--preprocess', 
+       action='store_true'
+    )    
+    parser.add_argument(
         '--dig_sep', 
        action='store_true'
     )

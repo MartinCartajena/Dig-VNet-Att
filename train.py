@@ -110,6 +110,12 @@ def main(args):
 
                 validation_pred = []
                 validation_true = []
+                
+                validation_pred_softdice = []
+                validation_true_softdice = []
+                
+                train_pred_softdice = []
+                train_true_softdice = []
 
                 for i, data in enumerate(loaders[phase]):
                     if phase == "train":
@@ -138,6 +144,22 @@ def main(args):
                             if args.loss == "crossentropy":
                                 y_true_adjusted = y_true.long()
                                 loss = loss_function(y_pred, y_true_adjusted)
+                                
+                                t_pred_np = y_pred.detach()
+                                t_true_np = y_true.detach()
+                                        
+                                t_pred_np_softdice = torch.sigmoid(t_pred_np)
+                                t_pred_np_softdice = torch.argmax(t_pred_np_softdice, dim=1).cpu().numpy()
+                                            
+                                t_true_np_softdice = t_true_np.cpu().numpy()
+                                
+                                train_pred_softdice.extend(
+                                    [t_pred_np_softdice[s] for s in range(t_pred_np_softdice.shape[0])]
+                                )
+                                train_true_softdice.extend(
+                                    [t_true_np_softdice[s] for s in range(t_true_np_softdice.shape[0])]
+                                )
+                                
                             else:
                                 loss = loss_function(y_pred, y_true)
 
@@ -146,6 +168,19 @@ def main(args):
                             if args.loss == "crossentropy":
                                 y_pred_np = y_pred.detach()
                                 y_true_np = y_true.detach()
+                                
+                                y_pred_np_softdice = torch.sigmoid(y_pred_np)
+                                y_pred_np_softdice = torch.argmax(y_pred_np_softdice, dim=1).cpu().numpy()
+                                
+                                y_true_np_softdice = y_true.cpu().numpy()
+                                
+                                validation_pred_softdice.extend(
+                                    [y_pred_np_softdice[s] for s in range(y_pred_np_softdice.shape[0])]
+                                )
+                                validation_true_softdice.extend(
+                                    [y_true_np_softdice[s] for s in range(y_true_np_softdice.shape[0])]
+                                )
+                                
                             else:
                                 y_pred_np = y_pred.detach().cpu().numpy()
                                 y_true_np = y_true.detach().cpu().numpy()
@@ -163,8 +198,18 @@ def main(args):
                             optimizer.step()
 
                 if phase == "train":
+                    train_mean_softdsc = np.mean(
+                            dsc_per_volume_not_flatten(
+                                train_pred_softdice,
+                                train_true_softdice
+                            )
+                    )
+                    
                     epoch_loss = np.round(np.mean(loss_train), 6)
+                    print(f"Num. images to train: {dataset.__len__()}")
                     print(f"Train: Epoch {epoch} --> {args.loss} loss {epoch_loss}")
+                    print(f"Train: softdice --> {train_mean_softdsc}")  
+                    mlflow.log_metric("train_softdice", train_mean_softdsc, step=epoch)                  
                     mlflow.log_metric(f"Train_{args.loss}_loss", epoch_loss, step=epoch)
                     loss_train = []             
 
@@ -185,12 +230,12 @@ def main(args):
                         
                         mean_softdsc = np.mean(
                             dsc_per_volume_not_flatten(
-                                validation_pred,
-                                validation_true
+                                validation_pred_softdice,
+                                validation_true_softdice
                             )
                         )
                         
-                        mlflow.log_metric("Softdice", mean_softdsc, step=epoch)
+                        mlflow.log_metric("validation_softdice", mean_softdsc, step=epoch)
 
 
                     else:
@@ -205,6 +250,7 @@ def main(args):
                         mlflow.log_metric("validation_softdsc", mean_softdsc, step=epoch)
 
 
+                    print(f"Num. images to valid: {dataset_val.__len__()}")
                     print(f"Validation: Epoch {epoch} --> {args.loss} loss {current_loss}")
                     mlflow.log_metric(f"Validation_{args.loss}_loss", current_loss, step=epoch)
 
@@ -278,12 +324,13 @@ def datasets(args):
         root_dir=args.data_path, 
         split='train', 
         preprocess=args.preprocess,
-        transform=transforms(
-                        rot_prob=0.5,
-                        horizontal_flip_prob=0.5,
-                        vertical_flip_prob=0.5,
-                        salt_pepper_prob={'prob': 0.1, 'amount': 0.01, 'salt_ratio': 0.5}
-                    ),
+        # transform=transforms(
+        #                 rot_prob=0.5,
+        #                 horizontal_flip_prob=0.5,
+        #                 vertical_flip_prob=0.5,
+        #                 salt_pepper_prob={'prob': 0.1, 'amount': 0.01, 'salt_ratio': 0.5}
+        #             ),
+        transform=None,
         data_aug=DataAugmentation(noise_amount=0.03, salt_ratio=0.5)
     )
     

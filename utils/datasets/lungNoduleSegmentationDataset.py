@@ -247,8 +247,8 @@ class LungNoduleSegmentationDataset(Dataset):
         """
 
         """ SEGMENTAR PULMONES """
-        image = self.orient_RAS(image, affine)
-        label = self.orient_RAS(label, affine)
+        # image = self.orient_RAS(image, affine)
+        # label = self.orient_RAS(label, affine)
         
         left_lung_parts_masks, right_lung_parts_masks = self._segment_lungs(image)
 

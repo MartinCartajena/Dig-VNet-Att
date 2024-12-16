@@ -87,7 +87,7 @@ def save_boxplot(metrics, experiment_name):
         ax.set_title(metric_name)
     
     plt.tight_layout(rect=[0, 0, 1, 0.96])  # Ajuste para título principal
-    boxplot_path = f"/results/plots/boxplots_{experiment_name}.png"
+    boxplot_path = f"./results/plots/boxplots_{experiment_name}.png"
     plt.savefig(boxplot_path)
     plt.close(fig)
     
@@ -95,9 +95,9 @@ def save_boxplot(metrics, experiment_name):
 
 def main():
     # Directorios
-    pred_dir = "./results/preds/aug"
-    gt_dir = "./data/labelsAugTs/"
-    model_name = "weights/model_20241124_113058.pt"
+    pred_dir = "./results/preds/LNDb_only_nod"
+    gt_dir = "/app/data/labelsTs"
+    model_name = "weights/model_aritz_data.pt"
     
     actual_date = datetime.now().strftime("%Y%m%d_%H%M%S")
     

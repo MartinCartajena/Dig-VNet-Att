@@ -319,7 +319,7 @@ class VNet_CBAM(nn.Module):
         
         # Fondo y quinta capa de attention 
         self.bottom = conv3d_x3(256, 256)
-        self.cbam_5 = CBAM3D(256) 
+        # self.cbam_5 = CBAM3D(256) 
 
 
         # Decodificador
@@ -355,10 +355,11 @@ class VNet_CBAM(nn.Module):
 
         # Fondo
         bottom = self.bottom(pool_4)
-        attention_5 = self.cbam_5(bottom)
+        # attention_5 = self.cbam_5(bottom)
 
         # Decoder utilizando skip connections con CBAM
-        deconv_4 = self.deconv_4(attention_4, attention_5)
+        # deconv_4 = self.deconv_4(attention_4, attention_5)
+        deconv_4 = self.deconv_4(attention_4, bottom)
         deconv_3 = self.deconv_3(attention_3, deconv_4)
         deconv_2 = self.deconv_2(attention_2, deconv_3)
         deconv_1 = self.deconv_1(attention_1, deconv_2)

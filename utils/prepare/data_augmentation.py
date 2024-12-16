@@ -1,7 +1,7 @@
 import numpy as np
 
 class DataAugmentation:
-    def __init__(self, noise_amount=0.05, salt_ratio=0.5):
+    def __init__(self, noise_amount=0.05, salt_ratio=0.5, orientation = "RAS"):
         """
         Inicializa la clase de aumentación de datos.
         
@@ -11,12 +11,22 @@ class DataAugmentation:
         """
         self.noise_amount = noise_amount
         self.salt_ratio = salt_ratio
-        self.transformations = {
-            "rotate180": lambda x: np.rot90(x, k=1, axes=(0, 1)),
-            "transpose": lambda x: np.flip(np.rot90(x, k=1, axes=(0, 1)), axis=2),
-            "flip_y": lambda x: np.flip(x, axis=1),
-            "flip_x": lambda x: np.flip(x, axis=0),
-        }
+        self.orientation = orientation
+        
+        if orientation == "RAS":
+            self.transformations = {
+                "rotate180": lambda x: np.rot90(x, k=1, axes=(0, 1)),
+                "transpose": lambda x: np.flip(np.rot90(x, k=1, axes=(0, 1)), axis=2),
+                "flip_y": lambda x: np.flip(x, axis=1),
+                "flip_x": lambda x: np.flip(x, axis=0),
+            }
+        else:
+            self.transformations = {
+                "rotate180": lambda x: np.rot90(x, k=2, axes=(1, 2)),
+                "transpose": lambda x: np.flip(np.rot90(x, k=2, axes=(1, 2)), axis=0),
+                "flip_y": lambda x: np.flip(x, axis=2),
+                "flip_x": lambda x: np.flip(x, axis=1),
+            }
 
     def add_salt_and_pepper_noise(self, data):
         """
@@ -61,8 +71,12 @@ class DataAugmentation:
         augmented_labels = {}
 
         # Orden inverso
-        reversed_images = images[::-1, :, :]
-        reversed_masks = masks[::-1, :, :]
+        if self.orientation == "RAS":
+            reversed_images = images[:, :, ::-1]
+            reversed_masks = masks[:, :, ::-1]
+        else:   
+            reversed_images = images[::-1, :, :]
+            reversed_masks = masks[::-1, :, :]
 
         # Transformaciones sobre las imágenes originales y máscaras
         for name, transform in self.transformations.items():

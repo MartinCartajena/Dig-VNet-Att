@@ -9,13 +9,14 @@ from medpy.filter.binary import largest_connected_component
 from skimage.io import imsave
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import mlflow
 
 from evaluate.loss.dice_loss import soft_dsc
 from utils.prepare.dig_module import BitwiseImageTransformer
 from utils.prepare.prepareLoss import dsc_per_volume_not_flatten
 
 import models.Dig_Sep_VNet_CBAM as VNet_CBAM
-from utils.datasets.lungNoduleSegmentationDataset import LungNoduleSegmentationDataset as Dataset
+from utils.datasets.train_datasets.lungNodSeg import LungNodSeg as Dataset
 
 
 def main(args):
@@ -26,11 +27,15 @@ def main(args):
 
     with torch.set_grad_enabled(False):
         
-        vnet = VNet_CBAM.VNet_CBAM(16, args.loss)
+        if args.weights != None:
         
-        state_dict = torch.load(args.weights, map_location=device)
-        vnet.load_state_dict(state_dict)
-        
+            vnet = VNet_CBAM.VNet_CBAM(16, args.loss)
+            
+            state_dict = torch.load(args.weights, map_location=device)
+            vnet.load_state_dict(state_dict)
+        else:
+            vnet = mlflow.pytorch.load_model(args.model_uri)
+
         vnet.eval()
         vnet.to(device)
 
@@ -63,7 +68,7 @@ def data_loader(args):
         transform=None
     )
     loader = DataLoader(
-        dataset, batch_size=args.batch_size, drop_last=False, num_workers=8
+        dataset, batch_size=args.batch_size, drop_last=False, num_workers=1
     )
     return loader
 
@@ -89,7 +94,10 @@ if __name__ == "__main__":
         help="input batch size for training (default: 32)",
     )
     parser.add_argument(
-        "--weights", type=str, required=True, help="path to weights file"
+        "--weights", type=str, default=None, help="path to weights file"
+    )
+    parser.add_argument(
+        "--model_uri", type=str, help="mlflow model path"
     )
     parser.add_argument(
         "--images", type=str, required=True,

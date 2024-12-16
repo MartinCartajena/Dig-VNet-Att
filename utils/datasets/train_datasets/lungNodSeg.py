@@ -16,7 +16,7 @@ from totalsegmentator.python_api import totalsegmentator
 
 import tempfile
 
-class LungNoduleSegmentationDataset(Dataset):
+class LungNodSeg(Dataset):
     def __init__(
         self, 
         root_dir, 
@@ -91,7 +91,7 @@ class LungNoduleSegmentationDataset(Dataset):
     def _load_file(self, path):
         """Carga un archivo dependiendo de su extensión."""
         if path.endswith(".npy"):
-            return np.load(path)
+            return np.load(path), None
         elif path.endswith(".nii.gz"):
             return nib.load(path).get_fdata(), nib.load(path).affine
         
@@ -393,12 +393,12 @@ class LungNoduleSegmentationDataset(Dataset):
                 image = torch.from_numpy(image).float()
                 label = torch.from_numpy(label).long() 
                 
-                # name = self.images[idx].split("/")[len(self.images[idx].split("/"))-1]
+                name = self.images[idx].split("/")[len(self.images[idx].split("/"))-1]
 
                 self.cache_images.append(image)
                 self.cache_labels.append(label)
                 
-                return image, label
+                return image, label, name
 
         else:
             image = self.cache_images[idx]

@@ -52,6 +52,11 @@ def get_args():
         default="model.pt", 
     )
     parser.add_argument(
+        '--dataset', 
+        type=str, 
+        default='1'
+    )
+    parser.add_argument(
         '--data_path', 
         type=str, 
         default=''

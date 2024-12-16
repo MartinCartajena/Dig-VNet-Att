@@ -58,7 +58,7 @@ def main(args):
     
 
     if args.dig_sep:
-        vnet = VNet_CBAM.VNet_CBAM(16, args.loss)
+        vnet = VNet_CBAM.VNet_CBAM(8, args.loss)
     else:
         vnet = VNet_CBAM.VNet_CBAM(1, args.loss)
 
@@ -135,6 +135,13 @@ def main(args):
 
                         x = x.unsqueeze(1) # convert to [16, 1, 16, 96, 96]
                         
+                        # size_in_bytes = tensor.numel() * tensor.element_size()
+
+                        # # Convertir a gigabytes
+                        # size_in_gb = size_in_bytes / (1024 ** 3)
+
+                        # print(f"El tensor ocupa aproximadamente {size_in_gb:.6f} GB en memoria.")
+                        
                         if args.dig_sep:
                             y_pred = vnet(dig_x)
                         else:
@@ -206,7 +213,7 @@ def main(args):
                     )
                     
                     epoch_loss = np.round(np.mean(loss_train), 6)
-                    print(f"Num. images to train: {dataset.__len__()}")
+                    # print(f"Num. images to train: {dataset.__len__()}")
                     print(f"Train: Epoch {epoch} --> {args.loss} loss {epoch_loss}")
                     print(f"Train: softdice --> {train_mean_softdsc}")  
                     mlflow.log_metric("train_softdice", train_mean_softdsc, step=epoch)                  
@@ -250,7 +257,7 @@ def main(args):
                         mlflow.log_metric("validation_softdsc", mean_softdsc, step=epoch)
 
 
-                    print(f"Num. images to valid: {dataset_val.__len__()}")
+                    # print(f"Num. images to valid: {dataset_val.__len__()}")
                     print(f"Validation: Epoch {epoch} --> {args.loss} loss {current_loss}")
                     mlflow.log_metric(f"Validation_{args.loss}_loss", current_loss, step=epoch)
 
@@ -331,7 +338,7 @@ def datasets(args):
         #                 salt_pepper_prob={'prob': 0.1, 'amount': 0.01, 'salt_ratio': 0.5}
         #             ),
         transform=None,
-        data_aug=DataAugmentation(noise_amount=0.03, salt_ratio=0.5)
+        data_aug= DataAugmentation(noise_amount=0.03, salt_ratio=0.5)
     )
     
     valid = Dataset(

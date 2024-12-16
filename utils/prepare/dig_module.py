@@ -66,11 +66,13 @@ class BitwiseImageTransformer:
         dig_sep_images = self._calculate_images(masks)
         
         
-        duplicated_dig_sep_images = [torch.cat((t.unsqueeze(1), t.unsqueeze(1)), dim=1) for t in dig_sep_images]
+        # n_dig_sep_images = [torch.cat((t.unsqueeze(1), t.unsqueeze(1)), dim=1) for t in dig_sep_images]
         
-        dig_sep_res = torch.cat([t for t in duplicated_dig_sep_images], dim=1)
+        n_dig_sep_images = [t.unsqueeze(1) for t in dig_sep_images]
+
+        dig_sep_res = torch.cat([t for t in n_dig_sep_images], dim=1)
         
-        expanded_tensor = self.input_tensor.unsqueeze(1).repeat(1, 8, 1, 1, 1)
+        expanded_tensor = self.input_tensor.unsqueeze(1).repeat(1, 4, 1, 1, 1)
         
         output_tensor = torch.cat((dig_sep_res, expanded_tensor), dim=1)
         # distancia_max = 2 * (x[5,:,:,:].numel() ** 0.5)

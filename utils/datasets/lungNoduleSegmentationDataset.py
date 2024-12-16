@@ -8,6 +8,7 @@ from scipy.ndimage import label as label_ndimage
 from scipy.ndimage import uniform_filter
 from scipy.ndimage import zoom
 
+
 from totalsegmentator.python_api import totalsegmentator
 
 
@@ -122,36 +123,6 @@ class LungNoduleSegmentationDataset(Dataset):
         return sitk.GetArrayFromImage(image)  # Convierte a NumPy
 
     
-    def orient_RAS(self, image, affine):
-        """
-        Verifica si la imagen está en la orientación RAS. Si no lo está, la convierte a RAS.
-        
-        Parameters:
-            image (np.ndarray): Datos de la imagen como un arreglo NumPy.
-            affine (np.ndarray): Matriz de afinidad asociada con la imagen.
-        
-        Returns:
-            image_ras (np.ndarray): Imagen convertida a RAS.
-            affine_ras (np.ndarray): Matriz de afinidad correspondiente en orientación RAS.
-        """
-        # Obtén la orientación actual
-        current_orientation = nib.aff2axcodes(affine)
-        
-        # Objetivo: orientación RAS
-        target_orientation = ('R', 'A', 'S')
-        
-        if current_orientation != target_orientation:
-            transform = nib.orientations.ornt_transform(
-                nib.orientations.io_orientation(affine),
-                nib.orientations.axcodes2ornt(target_orientation)
-            )
-            
-            image_ras = nib.orientations.apply_orientation(image, transform)
-            
-            return image_ras
-        else:
-            return image
-    
     
     def _segment_lungs(self, image):
         """
@@ -214,7 +185,7 @@ class LungNoduleSegmentationDataset(Dataset):
 
         return cropped_image, cropped_label
     
-    def resize_image_and_label(self, image, label, target_size=(256, 256, 224)):
+    def resize_image_and_label(self, image, label, target_size=(128, 128, 128)):
         """
         Redimensiona una imagen y su máscara a las dimensiones especificadas.
 
@@ -240,15 +211,40 @@ class LungNoduleSegmentationDataset(Dataset):
         
         return resized_image, resized_label
     
+    
+    def clip_pixel_intensities(self, image, min_value=-1000, max_value=400):
+        """
+        Acota los valores de intensidad de los píxeles a un rango específico.
+        
+        Parameters:
+            image (np.ndarray): Imagen a procesar.
+            min_value (float): Valor mínimo permitido.
+            max_value (float): Valor máximo permitido.
+        
+        Returns:
+            np.ndarray: Imagen con intensidades acotadas.
+        """
+        return np.clip(image, min_value, max_value)
 
+    def normalized_values(self, image):
+        min_val = np.min(image)
+        max_val = np.max(image)
+        range_val = max_val - min_val
+
+        if range_val == 0:
+            # Si todos los valores son iguales, normalizamos a un array de ceros
+            return np.zeros_like(image)
+
+        # Fórmula de normalización entre -1 y 1
+        return 2 * (image - min_val) / range_val - 1
+    
+    
     def _preprocess(self, image, affine, label, idx):
         """
         Segmentar pulmones y recortar cada pulmón, eliminando ruido usando el otro pulmón.
         """
 
         """ SEGMENTAR PULMONES """
-        # image = self.orient_RAS(image, affine)
-        # label = self.orient_RAS(label, affine)
         
         left_lung_parts_masks, right_lung_parts_masks = self._segment_lungs(image)
 
@@ -260,9 +256,14 @@ class LungNoduleSegmentationDataset(Dataset):
 
         for mask in right_lung_parts_masks:
             right_lung_only_image += image * mask
+            
+        
+        """ CLIP INTESITIES [-1000, 400]"""
+        left_lung_only_image = self.clip_pixel_intensities(left_lung_only_image)
+        right_lung_only_image = self.clip_pixel_intensities(right_lung_only_image)
 
         """ ELIMINAR RUIDO UTILIZANDO EL INICIO DEL OTRO PULMÓN """
-        def remove_noise_using_start_of_other_lung(lung_image, threshold=5, neighborhood_size=3):
+        def remove_noise_using_start_of_other_lung(lung_image, affine):
             # binary_mask = lung_image > 0
     
             # # Calcular el número de vecinos no cero en una ventana 3D usando un filtro uniforme
@@ -277,52 +278,55 @@ class LungNoduleSegmentationDataset(Dataset):
             # return clean_lung 
                 
             """ LAS COMPONENTES CONECTADAS TARDAN MUCHO.... """
-            # # Etiquetar componentes conexos
-            # labeled_image, num_features = label_ndimage(lung_image > 0)
+            # # Identificar regiones conectadas
+            # structure = np.ones((3, 3, 3), dtype=int)  # Estructura para considerar conexiones 26-vecinas
+            # labeled_array, num_features = label_ndimage(lung_image > 0, structure=structure)
             
-            # # Crear una máscara para conservar los componentes suficientemente grandes
-            # clean_lung = np.zeros_like(lung_image, dtype=lung_image.dtype)
-            # for component in range(1, num_features + 1):
-            #     component_mask = (labeled_image == component)
-            #     if np.sum(component_mask) >= min_voxel_size:
-            #         clean_lung[component_mask] = lung_image[component_mask]
+            # # Calcular el tamaño de cada región conectada
+            # region_sizes = np.bincount(labeled_array.ravel())
             
-            # return clean_lung
+            # # Eliminar el fondo (etiqueta 0)
+            # region_sizes[0] = 0
+            
+            # # Identificar la etiqueta de la región más grande (que se supone es el pulmón)
+            # largest_region_label = region_sizes.argmax()
+            
+            # # Crear una máscara para mantener solo la región más grande
+            # cleaned_image = np.where(labeled_array == largest_region_label, lung_image, 0)
+            
+            # return cleaned_image
         
             """ Este es un codgio  que he hecho que da algun problema, mejor usar componentes conectadas 
             aunque sea  algo mas lento"""
             values_x = np.max(lung_image, axis=(1, 2))
             
-            agrupations = []
-            group = []
-            desv = 0
-            in_group = False
+            unique_indices, counts = np.unique(np.argwhere(lung_image != 0)[:,0], return_counts=True)
             
-            for i in range(len(values_x)):
-                if values_x[i] != 0:  
-                    group.append(i) 
-                    in_group = True
-                    
+            agrupaciones = []
+            grupo_actual = [unique_indices[0]]
+            
+            for i in range(1, len(unique_indices)):
+                # Si la diferencia es menor o igual a 30, añadimos al grupo actual
+                if unique_indices[i] - unique_indices[i - 1] <= 10:
+                    grupo_actual.append(unique_indices[i])
                 else:
-                    if in_group:
-                        desv += 1
-                        if desv > 40:
-                            in_group = False
-                            if len(group) > 0:
-                                agrupations.append(group)
-                            group = []
-                            desv = 0
-                                
-            for groups in agrupations:
-                if len(groups) < 10:
+                    # Si no, cerramos el grupo actual y comenzamos uno nuevo
+                    agrupaciones.append(grupo_actual)
+                    grupo_actual = [unique_indices[i]]
+
+            # Añadimos el último grupo
+            agrupaciones.append(grupo_actual)
+                        
+            for groups in agrupaciones:
+                if len(groups) < 100:
                     for i in groups:
                         lung_image[i,:,:] = 0
 
             return lung_image
 
         # Aplica el filtro de eliminación de ruido a las imágenes de los pulmones
-        left_lung_only_image = remove_noise_using_start_of_other_lung(left_lung_only_image, right_lung_only_image)
-        right_lung_only_image = remove_noise_using_start_of_other_lung(right_lung_only_image, left_lung_only_image)
+        left_lung_only_image = remove_noise_using_start_of_other_lung(left_lung_only_image, affine)
+        right_lung_only_image = remove_noise_using_start_of_other_lung(right_lung_only_image, affine)
 
 
         """ COMPROBAR QUE LA MÁSCARA tiene los mismos valores que la imagen original en los pulmones y que no se han superpuesto las segmentaciones a la hoa de sumar"""
@@ -342,11 +346,14 @@ class LungNoduleSegmentationDataset(Dataset):
         left_lung, left_label = self._trim_lung(left_lung_only_image, label)
         right_lung, right_label = self._trim_lung(right_lung_only_image, label)
         
-        """ RESIZE A () """        
-
+        """ RESIZE A (128, 128, 128) """        
         resized_left_lung, resized_left_label = self.resize_image_and_label(left_lung, left_label)
         resized_right_lung, resized_right_label = self.resize_image_and_label(right_lung, right_label)
 
+        """ NORMALIZE VALUES [-1, 1] """
+        resized_left_lung = self.normalized_values(resized_left_lung)
+        resized_right_lung = self.normalized_values(resized_right_lung)
+        
         return resized_left_lung, resized_right_lung , resized_left_label, resized_right_label
 
     

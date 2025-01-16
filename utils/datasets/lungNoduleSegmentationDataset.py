@@ -5,7 +5,7 @@ import numpy as np
 import nibabel as nib
 import SimpleITK as sitk
 from scipy.ndimage import label as label_ndimage
-from scipy.ndimage import uniform_filter
+from scipy.ndimage import uniform_filter, binary_dilation, binary_erosion, binary_fill_holes
 from scipy.ndimage import zoom
 
 
@@ -239,162 +239,201 @@ class LungNoduleSegmentationDataset(Dataset):
         return 2 * (image - min_val) / range_val - 1
     
     
+    
+        """ ELIMINAR RUIDO UTILIZANDO EL INICIO DEL OTRO PULMÓN """
+    def remove_noise_using_start_of_other_lung(self, lung_image, affine):
+        values_x = np.max(lung_image, axis=(1, 2))
+        
+        unique_indices, counts = np.unique(np.argwhere(lung_image != 0)[:,0], return_counts=True)
+        
+        agrupaciones = []
+        grupo_actual = [unique_indices[0]]
+        
+        for i in range(1, len(unique_indices)):
+            # Si la diferencia es menor o igual a 30, añadimos al grupo actual
+            if unique_indices[i] - unique_indices[i - 1] <= 10:
+                grupo_actual.append(unique_indices[i])
+            else:
+                # Si no, cerramos el grupo actual y comenzamos uno nuevo
+                agrupaciones.append(grupo_actual)
+                grupo_actual = [unique_indices[i]]
+        # Añadimos el último grupo
+        agrupaciones.append(grupo_actual)
+                    
+        for groups in agrupaciones:
+            if len(groups) < 100:
+                for i in groups:
+                    lung_image[i,:,:] = 0
+        return lung_image
+
+
+    """ COMPROBAR QUE LA MÁSCARA tiene los mismos valores que la imagen original en los pulmones y que no se han superpuesto las segmentaciones a la hoa de sumar"""
+    def verify_mask(self, original_image, segmented_image):
+        mask = segmented_image > 0
+        original_values = original_image[mask]
+        segmented_values = segmented_image[mask]
+        if not np.array_equal(original_values, segmented_values):
+            segmented_image[mask] = original_image[mask]
+        return segmented_image
+    
     def _preprocess(self, image, affine, label, idx):
         """
         Segmentar pulmones y recortar cada pulmón, eliminando ruido usando el otro pulmón.
         """
 
         """ SEGMENTAR PULMONES """
-        
-        left_lung_parts_masks, right_lung_parts_masks = self._segment_lungs(image)
+        try:
+            left_lung_parts_masks, right_lung_parts_masks = self._segment_lungs(image)
 
-        left_lung_only_image = np.zeros_like(image)
-        right_lung_only_image = np.zeros_like(image)
+            left_lung_only_image = np.zeros_like(image)
+            right_lung_only_image = np.zeros_like(image)
 
-        for mask in left_lung_parts_masks:
-            left_lung_only_image += image * mask
+            for mask in left_lung_parts_masks:
+                left_lung_only_image += mask
 
-        for mask in right_lung_parts_masks:
-            right_lung_only_image += image * mask
-            
-        
-        """ CLIP INTESITIES [-1000, 400]"""
-        left_lung_only_image = self.clip_pixel_intensities(left_lung_only_image)
-        right_lung_only_image = self.clip_pixel_intensities(right_lung_only_image)
-
-        """ ELIMINAR RUIDO UTILIZANDO EL INICIO DEL OTRO PULMÓN """
-        def remove_noise_using_start_of_other_lung(lung_image, affine):
-            # binary_mask = lung_image > 0
-    
-            # # Calcular el número de vecinos no cero en una ventana 3D usando un filtro uniforme
-            # neighborhood_count = uniform_filter(binary_mask.astype(np.float32), size=neighborhood_size) * (neighborhood_size**3)
-            
-            # # Generar una nueva máscara basada en el umbral de vecinos
-            # refined_mask = neighborhood_count >= threshold
-            
-            # # Aplicar la máscara refinada a la imagen original
-            # clean_lung = lung_image * refined_mask
-            
-            # return clean_lung 
+            for mask in right_lung_parts_masks:
+                right_lung_only_image += mask
                 
-            """ LAS COMPONENTES CONECTADAS TARDAN MUCHO.... """
-            # # Identificar regiones conectadas
-            # structure = np.ones((3, 3, 3), dtype=int)  # Estructura para considerar conexiones 26-vecinas
-            # labeled_array, num_features = label_ndimage(lung_image > 0, structure=structure)
             
-            # # Calcular el tamaño de cada región conectada
-            # region_sizes = np.bincount(labeled_array.ravel())
+            """ ELIMINAR RUIDO DE LAS SEGMENTACIONES """
+            left_lung_only_image = self.remove_noise_using_start_of_other_lung(left_lung_only_image, affine)
+            right_lung_only_image = self.remove_noise_using_start_of_other_lung(right_lung_only_image, affine)
+                    
+            """ DILATAR, RELLENAR HUECOS Y DESHACER DILATACION """
+            left_dilated_mask = binary_dilation(left_lung_only_image, iterations=8)
+            left_dilated_mask = binary_fill_holes(left_dilated_mask)
+            left_eroded_mask = binary_erosion(left_dilated_mask, iterations=8)
             
-            # # Eliminar el fondo (etiqueta 0)
-            # region_sizes[0] = 0
+            left_lung_only_image = image * left_eroded_mask
+
+            right_dilated_mask = binary_dilation(right_lung_only_image, iterations=8)
+            right_dilated_mask = binary_fill_holes(right_dilated_mask)
+            right_eroded_mask = binary_erosion(right_dilated_mask, iterations=8)
             
-            # # Identificar la etiqueta de la región más grande (que se supone es el pulmón)
-            # largest_region_label = region_sizes.argmax()
+            right_lung_only_image = image * right_eroded_mask
             
-            # # Crear una máscara para mantener solo la región más grande
-            # cleaned_image = np.where(labeled_array == largest_region_label, lung_image, 0)
+            """ CLIP INTESITIES [-1000, 400]"""
+            left_lung_only_image = self.clip_pixel_intensities(left_lung_only_image)
+            right_lung_only_image = self.clip_pixel_intensities(right_lung_only_image)
+
+            left_lung_only_image = self.verify_mask(image, left_lung_only_image)
+            right_lung_only_image = self.verify_mask(image, right_lung_only_image)
+
+            """ RECORTAR PULMONES """        
+            left_lung, left_label = self._trim_lung(left_lung_only_image, label)
+            right_lung, right_label = self._trim_lung(right_lung_only_image, label)
             
-            # return cleaned_image
+            """ RESIZE A (128, 128, 128) """        
+            resized_left_lung, resized_left_label = self.resize_image_and_label(left_lung, left_label)
+            resized_right_lung, resized_right_label = self.resize_image_and_label(right_lung, right_label)
+
+            """ NORMALIZE VALUES [-1, 1] """
+            resized_left_lung = self.normalized_values(resized_left_lung)
+            resized_right_lung = self.normalized_values(resized_right_lung)
+            
+            return resized_left_lung, resized_right_lung , resized_left_label, resized_right_label
         
-            """ Este es un codgio  que he hecho que da algun problema, mejor usar componentes conectadas 
-            aunque sea  algo mas lento"""
-            values_x = np.max(lung_image, axis=(1, 2))
-            
-            unique_indices, counts = np.unique(np.argwhere(lung_image != 0)[:,0], return_counts=True)
-            
-            agrupaciones = []
-            grupo_actual = [unique_indices[0]]
-            
-            for i in range(1, len(unique_indices)):
-                # Si la diferencia es menor o igual a 30, añadimos al grupo actual
-                if unique_indices[i] - unique_indices[i - 1] <= 10:
-                    grupo_actual.append(unique_indices[i])
-                else:
-                    # Si no, cerramos el grupo actual y comenzamos uno nuevo
-                    agrupaciones.append(grupo_actual)
-                    grupo_actual = [unique_indices[i]]
-
-            # Añadimos el último grupo
-            agrupaciones.append(grupo_actual)
-                        
-            for groups in agrupaciones:
-                if len(groups) < 100:
-                    for i in groups:
-                        lung_image[i,:,:] = 0
-
-            return lung_image
-
-        # Aplica el filtro de eliminación de ruido a las imágenes de los pulmones
-        left_lung_only_image = remove_noise_using_start_of_other_lung(left_lung_only_image, affine)
-        right_lung_only_image = remove_noise_using_start_of_other_lung(right_lung_only_image, affine)
-
-
-        """ COMPROBAR QUE LA MÁSCARA tiene los mismos valores que la imagen original en los pulmones y que no se han superpuesto las segmentaciones a la hoa de sumar"""
-        def verify_mask(original_image, segmented_image):
-            mask = segmented_image > 0
-            original_values = original_image[mask]
-            segmented_values = segmented_image[mask]
-            if not np.array_equal(original_values, segmented_values):
-                segmented_image[mask] = original_image[mask]
-            return segmented_image
-
-        left_lung_only_image = verify_mask(image, left_lung_only_image)
-        right_lung_only_image = verify_mask(image, right_lung_only_image)
-
-
-        """ RECORTAR PULMONES """        
-        left_lung, left_label = self._trim_lung(left_lung_only_image, label)
-        right_lung, right_label = self._trim_lung(right_lung_only_image, label)
-        
-        """ RESIZE A (128, 128, 128) """        
-        resized_left_lung, resized_left_label = self.resize_image_and_label(left_lung, left_label)
-        resized_right_lung, resized_right_label = self.resize_image_and_label(right_lung, right_label)
-
-        """ NORMALIZE VALUES [-1, 1] """
-        resized_left_lung = self.normalized_values(resized_left_lung)
-        resized_right_lung = self.normalized_values(resized_right_lung)
-        
-        return resized_left_lung, resized_right_lung , resized_left_label, resized_right_label
+        except Exception as e:
+            print(f"Error procesando imagen: {e}")
 
     
     def __getitem__(self, idx):
+        
+        # if idx < 0 or idx >= len(self.images):
+        #     return None, None
+        # if idx < 0 or idx >= len(self.labels):
+        #     return None, None
+        print(f"Processing image:", self.images[idx])
+
         if not self.use_cache:
+            
+            name = self.images[idx].split("/")[len(self.images[idx].split("/"))-1]
+            
+            if self.split == "train":
+                
+                l_lung = "/app/preprocess/imagesTr/" + str(name).replace(".nii.gz", "_l.npy")
+                r_lung = "/app/preprocess/imagesTr/" + str(name).replace(".nii.gz", "_r.npy")
+                r_label = "/app/preprocess/labelsTr/" + str(name).replace(".nii.gz", "_r.npy")
+                l_label = "/app/preprocess/labelsTr/" + str(name).replace(".nii.gz", "_l.npy")
+                           
+            elif self.split == "val":
+                
+                l_lung = "/app/preprocess/imagesVal/" + str(name).replace(".nii.gz", "_l.npy")
+                r_lung = "/app/preprocess/imagesVal/" + str(name).replace(".nii.gz", "_r.npy")
+                r_label = "/app/preprocess/labelsVal/" + str(name).replace(".nii.gz", "_r.npy")
+                l_label = "/app/preprocess/labelsVal/" + str(name).replace(".nii.gz", "_l.npy")
+                
+            
             image, affine = self._load_file(self.images[idx])
             label, affine = self._load_file(self.labels[idx])
             
             # segmentar lung -> recortar cada pulmon -> resize 
             if self.preprocess:
-                left_lung, right_lung , left_label, right_label = self._preprocess(image, affine, label, idx)
                 
-                if self.data_aug:
-                    left_lung_aug, left_label_aug = self.data_aug(left_lung, left_label)
-                    right_lung_aug, right_label_aug = self.data_aug(right_lung, right_label)
+                if not os.path.exists(l_lung) or not os.path.exists(r_lung) or not os.path.exists(l_label) or not os.path.exists(r_label):
+                
+                    result = self._preprocess(image, affine, label, idx)
+                    
+                    if result == None:
+                        print(f"Error image:", self.images[idx])
 
-                    if len(left_lung_aug) > 0:
-                        for i in left_lung_aug: 
-                            self.cache_images.append(torch.from_numpy(left_lung_aug[i].copy()).float())
-                            self.cache_labels.append(torch.from_numpy(left_label_aug[i.replace("_image","_mask")].copy()).long())
-                            
-                    if len(right_lung_aug) > 0:
-                        for i in left_lung_aug: 
-                            self.cache_images.append(torch.from_numpy(right_lung_aug[i].copy()).float())
-                            self.cache_labels.append(torch.from_numpy(right_label_aug[i.replace("_image","_mask")].copy()).long())
-                               
-                left_lung = torch.from_numpy(left_lung.copy()).float()
-                right_lung = torch.from_numpy(right_lung.copy()).float()
-                
-                left_label = torch.from_numpy(left_label.copy()).long() 
-                right_label = torch.from_numpy(right_label.copy()).long() 
-                
-                # name = self.images[idx].split("/")[len(self.images[idx].split("/"))-1]
+                    left_lung, right_lung, left_label, right_label = result
 
-                self.cache_images.append(left_lung)
-                self.cache_images.append(right_lung)
-                
-                self.cache_labels.append(left_label)
-                self.cache_labels.append(right_label)
-             
+                    if self.data_aug:
+                        left_lung_aug, left_label_aug = self.data_aug(left_lung, left_label)
+                        right_lung_aug, right_label_aug = self.data_aug(right_lung, right_label)
+
+                        if len(left_lung_aug) > 0:
+                            for i in left_lung_aug: 
+                                self.cache_images.append(torch.from_numpy(left_lung_aug[i].copy()).float())
+                                self.cache_labels.append(torch.from_numpy(left_label_aug[i.replace("_image","_mask")].copy()).long())
+                                
+                        if len(right_lung_aug) > 0:
+                            for i in left_lung_aug: 
+                                self.cache_images.append(torch.from_numpy(right_lung_aug[i].copy()).float())
+                                self.cache_labels.append(torch.from_numpy(right_label_aug[i.replace("_image","_mask")].copy()).long())
+                                
+                    left_lung = torch.from_numpy(left_lung.copy()).float()
+                    right_lung = torch.from_numpy(right_lung.copy()).float()
+                    
+                    left_label = torch.from_numpy(left_label.copy()).long() 
+                    right_label = torch.from_numpy(right_label.copy()).long() 
+                    
+                    self.cache_images.append(left_lung)
+                    self.cache_images.append(right_lung)
+                    
+                    self.cache_labels.append(left_label)
+                    self.cache_labels.append(right_label)
+                    
+                    if self.split == "train":
+                        np.save("/app/preprocess/imagesTr/" + str(name).replace(".nii.gz", "_l.npy"), left_lung)
+                        np.save("/app/preprocess/imagesTr/" + str(name).replace(".nii.gz", "_r.npy"), right_lung)
+                        
+                        np.save("/app/preprocess/labelsTr/" + str(name).replace(".nii.gz", "_l.npy"), left_label)
+                        np.save("/app/preprocess/labelsTr/" + str(name).replace(".nii.gz", "_r.npy"), right_label)
+                        
+                    elif self.split == "val":
+                        np.save("/app/preprocess/imagesVal/" + str(name).replace(".nii.gz", "_l.npy"), left_lung)
+                        np.save("/app/preprocess/imagesVal/" + str(name).replace(".nii.gz", "_r.npy"), right_lung)
+                        
+                        np.save("/app/preprocess/labelsVal/" + str(name).replace(".nii.gz", "_l.npy"), left_label)
+                        np.save("/app/preprocess/labelsVal/" + str(name).replace(".nii.gz", "_r.npy"), right_label)
+                                        
+                else:
+                    
+                    left_lung = np.load(l_lung)
+                    right_lung = np.load(r_lung)
+                    left_label = np.load(l_label)
+                    right_label = np.load(r_label)
+                    
+                    self.cache_images.append(left_lung)
+                    self.cache_images.append(right_lung)
+                    
+                    self.cache_labels.append(left_label)
+                    self.cache_labels.append(right_label)
+                    
                 return left_lung, left_label
+ 
                 
             else:        
                 image = torch.from_numpy(image).float()

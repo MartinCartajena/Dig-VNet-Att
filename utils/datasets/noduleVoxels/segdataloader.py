@@ -118,8 +118,9 @@ class Dataset(torch.utils.data.Dataset):
         mask[mask > 0.5] = 1
         mask[mask < 0.5] = 0
         
+        file_name = input_path.split("/")[len(input_path.split("/"))-1]
         
-        return input, mask
+        return input, file_name, mask
 
     def __len__(self):
         if self.use_cache and self.data_aug:

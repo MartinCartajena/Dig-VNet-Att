@@ -11,7 +11,7 @@ class Config(object):
         self.initepochs = 11
         self.learning_rate = 0.00001
         self.gpu = 0
-        self.evaluate = False # test or train
+        self.evaluate = True # test or train
         self.resume = False
         self.num_classes = 3
         self.in_dim = 1
@@ -44,7 +44,7 @@ class Config(object):
         # self.maskPath1 = '/media/data/aaranguren/nodulos3d/'
         self.maskPath1 = '/app/imagenes/' 
         #self.maskPath1 = '//gpfs-cluster/proiektuak/DI02/Lucia/WP3/T3.4/CT/nodule_segmentation/UGS-Net/Subgrupo/'
-        self.csvPath = '/app/ugs/split_csv/' # fold_csv 
+        self.csvPath = '/app/ugs/needed/split_csv/' # fold_csv 
         # self.csvPath = '/home/VICOMTECH/aaranguren/UGS-Net/dataprocess/split_csv/' # fold_csv 
         #self.maskPath2 = '//gpfs-cluster/proiektuak/DI02/Lucia/WP3/T3.4/CT/nodule_segmentation/UGS-Net/ImagenesPNG/'
         #self.midPath = '//gpfs-cluster/proiektuak/DI02/Lucia/WP3/T3.4/CT/nodule_segmentation/UGS-Net/ImagenesPNG/'

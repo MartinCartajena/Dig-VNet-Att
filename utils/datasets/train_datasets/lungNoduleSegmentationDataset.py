@@ -59,9 +59,11 @@ class LungNodSeg(Dataset):
             raise ValueError("El parámetro split debe ser 'train', 'val' o 'test'.")
 
         self.images = sorted([os.path.join(image_dir, f) for f in os.listdir(image_dir)])
-        self.labels = sorted([os.path.join(label_dir, f) for f in os.listdir(label_dir)])
+        
+        if split != 'test':        
+            self.labels = sorted([os.path.join(label_dir, f) for f in os.listdir(label_dir)])
 
-        assert len(self.images) == len(self.labels), "Número de imágenes y etiquetas no coincide."
+            assert len(self.images) == len(self.labels), "Número de imágenes y etiquetas no coincide."
         
         
     def setCache(self, use_cache):
@@ -353,7 +355,9 @@ class LungNodSeg(Dataset):
     def __getitem__(self, idx):
         if not self.use_cache:
             image, affine = self._load_file(self.images[idx])
-            label, affine = self._load_file(self.labels[idx])
+            
+            if self.split != "test":
+                label, affine = self._load_file(self.labels[idx])
             
             # segmentar lung -> recortar cada pulmon -> resize 
             if self.preprocess:
@@ -391,14 +395,23 @@ class LungNodSeg(Dataset):
                 
             else:        
                 image = torch.from_numpy(image).float()
-                label = torch.from_numpy(label).long() 
                 
-                name = self.images[idx].split("/")[len(self.images[idx].split("/"))-1]
+                if self.split != "test":
+                    label = torch.from_numpy(label).long() 
+                
+                    name = self.images[idx].split("/")[len(self.images[idx].split("/"))-1]
 
-                self.cache_images.append(image)
-                self.cache_labels.append(label)
+                    self.cache_images.append(image)
+                    self.cache_labels.append(label)
+                    
+                    return image, label, name
                 
-                return image, label, name
+                else:
+                    name = self.images[idx].split("/")[len(self.images[idx].split("/"))-1]
+
+                    self.cache_images.append(image)
+                    
+                    return image, name, []
 
         else:
             image = self.cache_images[idx]

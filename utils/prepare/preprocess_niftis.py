@@ -285,6 +285,6 @@ def preprocess_images(input_dir, output_dir, target_size=(96, 96, 16)):
 
 if __name__ == "__main__":
     input_dir = "/app/data/LNDb/solo_nodulos/"
-    output_dir = "/app/data/LNDb/voxels/"
+    output_dir = "/app/data/LNDb/voxels64/"
     
     preprocess_images(input_dir, output_dir, target_size=(96, 96, 16))

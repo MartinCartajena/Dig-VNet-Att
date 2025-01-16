@@ -65,7 +65,6 @@ class BitwiseImageTransformer:
         masks = self._generate_bit_masks()
         dig_sep_images = self._calculate_images(masks)
         
-        
         duplicated_dig_sep_images = [torch.cat((t.unsqueeze(1), t.unsqueeze(1)), dim=1) for t in dig_sep_images]
         
         dig_sep_res = torch.cat([t for t in duplicated_dig_sep_images], dim=1)

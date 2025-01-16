@@ -19,7 +19,7 @@ import mlflow
 import mlflow.pytorch
 
 from utils.datasets.transform import transforms
-from utils.datasets.train_datasets.lungNodSeg import LungNodSeg as Dataset
+from utils.datasets.train_datasets.lungNoduleSegmentationDataset import LungNodSeg as Dataset
 from utils.prepare.data_augmentation import DataAugmentation
 
 from utils.datasets.noduleVoxels.dataprocess import get_dataset
@@ -35,7 +35,6 @@ def main(args):
 
     experiment_name = f"Experiment_Segmentation_{actual_date}"
     mlflow.set_experiment(experiment_name)
-
 
     if args.dataset == '1':
         
@@ -152,7 +151,7 @@ def main(args):
                     if phase == "train":
                         step += 1
 
-                    x, y_true = data
+                    x, name, y_true = data
                     x, y_true = x.to(device), y_true.to(device)
 
                     if args.dig_sep:
